@@ -6,8 +6,6 @@ const authSubmit = document.querySelector("#auth-submit");
 const authMessage = document.querySelector("#auth-message");
 const authUsername = document.querySelector("#auth-username");
 const authPassword = document.querySelector("#auth-password");
-const authEmail = document.querySelector("#auth-email");
-const authDisplayName = document.querySelector("#auth-display-name");
 const logoutButton = document.querySelector("#logout-button");
 const accountName = document.querySelector("#account-name");
 
@@ -34,6 +32,14 @@ const documentForm = document.querySelector("#document-form");
 const documentTitle = document.querySelector("#document-title");
 const documentContent = document.querySelector("#document-content");
 const documentOutput = document.querySelector("#document-output");
+const userForm = document.querySelector("#user-form");
+const userOutput = document.querySelector("#user-output");
+const userList = document.querySelector("#user-list");
+const newUserDisplay = document.querySelector("#new-user-display");
+const newUserEmail = document.querySelector("#new-user-email");
+const newUserUsername = document.querySelector("#new-user-username");
+const newUserPassword = document.querySelector("#new-user-password");
+const newUserRole = document.querySelector("#new-user-role");
 const controlPanel = document.querySelector(".control-panel");
 
 const roleLabels = {
@@ -69,10 +75,7 @@ function createElement(tag, className, text) {
 function setAuthMode(mode) {
   authMode = mode;
   authTabs.forEach((tab) => tab.classList.toggle("active", tab.dataset.authMode === mode));
-  document.querySelectorAll(".register-only").forEach((item) => {
-    item.classList.toggle("hidden", mode !== "register");
-  });
-  authSubmit.textContent = mode === "register" ? "Kayıt Ol" : mode === "admin" ? "Admin Girişi" : "Giriş Yap";
+  authSubmit.textContent = mode === "admin" ? "Admin Girişi" : "Giriş Yap";
   authMessage.textContent = "";
   if (mode === "admin") {
     authUsername.value = authUsername.value || "admin";
@@ -83,18 +86,13 @@ async function submitAuth(event) {
   event.preventDefault();
   authMessage.textContent = "";
 
-  const endpoint = authMode === "register" ? "/api/auth/register" : "/api/auth/login";
   const payload = {
     username: authUsername.value.trim(),
     password: authPassword.value,
   };
-  if (authMode === "register") {
-    payload.email = authEmail.value.trim() || null;
-    payload.display_name = authDisplayName.value.trim() || null;
-  }
 
   try {
-    const response = await fetch(endpoint, {
+    const response = await fetch("/api/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -144,7 +142,7 @@ async function enterApp() {
   applyModeVisibility();
   await Promise.all([checkHealth(), loadTopics()]);
   if (currentUser.role === "admin") {
-    await Promise.all([loadOverview(), loadAudit()]);
+    await Promise.all([loadOverview(), loadAudit(), loadUsers()]);
   }
   await loadConversationHistory();
   if (!messages.children.length) {
@@ -408,6 +406,97 @@ async function loadAudit() {
   });
 }
 
+async function loadUsers() {
+  const response = await fetch("/api/admin/users", { headers: authHeaders() });
+  if (!response.ok) return;
+  const data = await response.json();
+  userList.replaceChildren();
+
+  data.users.forEach((user) => {
+    const row = createElement("div", "user-item");
+    const info = createElement("div", "user-info");
+    info.appendChild(createElement("strong", null, user.display_name));
+    info.appendChild(createElement("span", null, `${user.username} · ${roleLabels[user.role] || user.role} · ${user.active ? "aktif" : "pasif"}`));
+
+    const actions = createElement("div", "user-actions");
+    const reset = createElement("button", null, "Şifre");
+    reset.type = "button";
+    reset.addEventListener("click", () => resetUserPassword(user.username));
+
+    const toggle = createElement("button", null, user.active ? "Pasifleştir" : "Aktifleştir");
+    toggle.type = "button";
+    toggle.addEventListener("click", () => setUserStatus(user.username, !user.active));
+
+    actions.append(reset, toggle);
+    row.append(info, actions);
+    userList.appendChild(row);
+  });
+}
+
+async function createUser(event) {
+  event.preventDefault();
+  const payload = {
+    display_name: newUserDisplay.value.trim() || null,
+    email: newUserEmail.value.trim() || null,
+    username: newUserUsername.value.trim(),
+    password: newUserPassword.value,
+    role: newUserRole.value,
+  };
+  if (!payload.username || payload.password.length < 6) {
+    userOutput.textContent = "Kullanıcı adı ve en az 6 karakter şifre gerekli.";
+    return;
+  }
+
+  const response = await fetch("/api/admin/users", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify(payload),
+  });
+  const result = await response.json();
+  if (!response.ok) {
+    userOutput.textContent = result.detail || "Kullanıcı oluşturulamadı.";
+    return;
+  }
+
+  userOutput.textContent = `${result.username} oluşturuldu. Geçici şifreyi kullanıcıya güvenli kanaldan iletin.`;
+  newUserDisplay.value = "";
+  newUserEmail.value = "";
+  newUserUsername.value = "";
+  newUserPassword.value = "";
+  newUserRole.value = "employee";
+  await Promise.all([loadUsers(), loadOverview(), loadAudit()]);
+}
+
+async function resetUserPassword(username) {
+  const password = prompt(`${username} için yeni geçici şifre`);
+  if (!password || password.length < 6) {
+    userOutput.textContent = "Şifre en az 6 karakter olmalı.";
+    return;
+  }
+  const response = await fetch(`/api/admin/users/${encodeURIComponent(username)}/password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ password }),
+  });
+  userOutput.textContent = response.ok ? `${username} şifresi güncellendi.` : "Şifre güncellenemedi.";
+  await Promise.all([loadUsers(), loadAudit()]);
+}
+
+async function setUserStatus(username, active) {
+  const response = await fetch(`/api/admin/users/${encodeURIComponent(username)}/status`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ active }),
+  });
+  if (!response.ok) {
+    const result = await response.json();
+    userOutput.textContent = result.detail || "Kullanıcı durumu değiştirilemedi.";
+    return;
+  }
+  userOutput.textContent = `${username} ${active ? "aktifleştirildi" : "pasifleştirildi"}.`;
+  await Promise.all([loadUsers(), loadAudit()]);
+}
+
 async function loadConversationHistory() {
   const response = await fetch(`/api/conversations/${sessionId}`, { headers: authHeaders() });
   if (!response.ok) return;
@@ -495,9 +584,11 @@ clearButton.addEventListener("click", () => {
 refreshOverview.addEventListener("click", () => {
   loadOverview();
   loadAudit();
+  loadUsers();
 });
 ticketForm.addEventListener("submit", createTicketDraft);
 documentForm.addEventListener("submit", addKnowledgeDocument);
+userForm.addEventListener("submit", createUser);
 
 setAuthMode("login");
 restoreSession();

@@ -66,7 +66,7 @@ button {
 
 .auth-tabs {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
   margin-bottom: 14px;
 }
@@ -761,6 +761,60 @@ select:focus {
 .mini-line {
   display: block;
   margin-top: 5px;
+}
+
+.user-list {
+  margin-top: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.user-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+  padding: 10px;
+}
+
+.user-info {
+  min-width: 0;
+}
+
+.user-info strong,
+.user-info span {
+  display: block;
+}
+
+.user-info strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.88rem;
+}
+
+.user-info span {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.user-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.user-actions button {
+  min-height: 30px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: white;
+  color: var(--ink);
+  padding: 0 8px;
+  font-size: 0.76rem;
 }
 
 .empty-state {

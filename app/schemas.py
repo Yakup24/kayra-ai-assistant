@@ -145,13 +145,6 @@ class TicketDraftResponse(BaseModel):
     escalation_required: bool
 
 
-class RegisterRequest(BaseModel):
-    username: str = Field(..., min_length=3, max_length=40)
-    email: Optional[str] = Field(default=None, max_length=120)
-    password: str = Field(..., min_length=6, max_length=120)
-    display_name: Optional[str] = Field(default=None, max_length=80)
-
-
 class LoginRequest(BaseModel):
     username: str = Field(..., min_length=3, max_length=80)
     password: str = Field(..., min_length=1, max_length=120)
@@ -163,11 +156,32 @@ class UserProfile(BaseModel):
     email: Optional[str] = None
     display_name: str
     role: str
+    active: bool = True
 
 
 class AuthResponse(BaseModel):
     token: str
     user: UserProfile
+
+
+class UserCreateRequest(BaseModel):
+    username: str = Field(..., min_length=3, max_length=40)
+    email: Optional[str] = Field(default=None, max_length=120)
+    password: str = Field(..., min_length=6, max_length=120)
+    display_name: Optional[str] = Field(default=None, max_length=80)
+    role: str = Field(default="employee", max_length=30)
+
+
+class UserListResponse(BaseModel):
+    users: List[UserProfile]
+
+
+class PasswordResetRequest(BaseModel):
+    password: str = Field(..., min_length=6, max_length=120)
+
+
+class UserStatusRequest(BaseModel):
+    active: bool
 
 
 class ConversationMessage(BaseModel):

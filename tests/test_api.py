@@ -1,3 +1,5 @@
+from uuid import uuid4
+
 from fastapi.testclient import TestClient
 
 from app.main import app
@@ -72,15 +74,47 @@ def test_ticket_draft_endpoint_classifies_it_request():
 
 
 def test_registered_user_cannot_access_admin_overview():
-    username = "test_user_auth"
-    register = client.post(
-        "/api/auth/register",
+    username = f"user_{uuid4().hex[:8]}"
+    create = client.post(
+        "/api/admin/users",
         json={"username": username, "password": "secret123", "email": "test@example.com"},
+        headers=auth_headers(),
     )
-    if register.status_code == 400:
-        headers = auth_headers(username, "secret123")
-    else:
-        headers = {"Authorization": f"Bearer {register.json()['token']}"}
+    assert create.status_code == 200
+    headers = auth_headers(username, "secret123")
 
     response = client.get("/api/enterprise/overview", headers=headers)
     assert response.status_code == 403
+
+
+def test_public_registration_is_not_available():
+    response = client.post(
+        "/api/auth/register",
+        json={"username": "no_self_signup", "password": "secret123"},
+    )
+    assert response.status_code == 404
+
+
+def test_admin_can_manage_users_from_database():
+    username = f"dbuser_{uuid4().hex[:8]}"
+    headers = auth_headers()
+    create = client.post(
+        "/api/admin/users",
+        json={
+            "username": username,
+            "password": "secret123",
+            "email": "dbuser@example.com",
+            "display_name": "DB User",
+            "role": "it",
+        },
+        headers=headers,
+    )
+    assert create.status_code == 200
+    assert create.json()["role"] == "it"
+
+    users = client.get("/api/admin/users", headers=headers)
+    assert users.status_code == 200
+    assert any(user["username"] == username for user in users.json()["users"])
+
+    login = client.post("/api/auth/login", json={"username": username, "password": "secret123"})
+    assert login.status_code == 200

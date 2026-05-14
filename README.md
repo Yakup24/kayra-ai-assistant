@@ -12,6 +12,7 @@ Kayra; müşteri destek, IT, İK, uyumluluk, operasyon, ticket taslağı, audit 
 - Kaynak gösterimli cevaplar
 - Enterprise control center arayüzü
 - Rol seçimi: genel, çalışan, IT, İK ve destek
+- SQLite tabanlı admin kontrollü kullanıcı veritabanı
 - Alan, güven skoru, risk seviyesi ve sonraki aksiyon üretimi
 - Ticket taslağı üretimi
 - Admin doküman ekleme ve yeniden indeksleme
@@ -48,11 +49,12 @@ python -m uvicorn app.main:app --reload --port 8001
 ## Nasıl Kullanılır?
 
 1. Uygulamayı açın: `http://127.0.0.1:8000` veya bu makinede `http://127.0.0.1:8001`
-2. Normal kullanıcı için `Kayıt` sekmesinden hesap oluşturun
-3. Kullanıcı girişiyle sohbet ekranını kullanın
-4. Sol panelden rol seçin: `Genel`, `Çalışan`, `IT`, `İK` veya `Destek`
-5. `Online bilgi ara` seçeneğini açarsanız Kayra web kaynaklarından kısa ek bağlam çekmeyi dener
-6. Admin girişiyle Control Center, audit, ticket studio ve bilgi tabanı yönetimi açılır
+2. Admin hesabıyla giriş yapın
+3. Admin panelindeki `Kullanıcı Yönetimi` bölümünden çalışan hesabı oluşturun
+4. Çalışan, admin tarafından verilen kullanıcı adı/şifre ile giriş yapar
+5. Sol panelden rol seçin: `Genel`, `Çalışan`, `IT`, `İK` veya `Destek`
+6. `Online bilgi ara` seçeneğini açarsanız Kayra web kaynaklarından kısa ek bağlam çekmeyi dener
+7. Admin girişiyle Control Center, audit, ticket studio ve bilgi tabanı yönetimi açılır
 
 Varsayılan geliştirme admin hesabı:
 
@@ -62,6 +64,8 @@ Kullanıcı adı: admin
 ```
 
 Üretimde `.env` ile `AUTH_SECRET`, `ADMIN_USERNAME` ve `ADMIN_PASSWORD` değerlerini değiştirin.
+
+Not: Public/self kayıt yoktur. Kurumsal kullanımda kullanıcılar admin tarafından veritabanına eklenir.
 
 ## Chat API
 
@@ -151,6 +155,9 @@ app/
     rag.py                 Doküman yükleme, parçalama ve arama
     response.py            Chat cevap üretimi
     enterprise.py          Enterprise overview, audit, ticket ve admin servisleri
+    auth.py                SQLite kullanıcı veritabanı, parola hash ve token yönetimi
+    conversation.py        Kayıtlı sohbet geçmişi
+    online.py              Anahtarsız online bilgi arama adaptörü
     privacy.py             Veri maskeleme yardımcıları
     analytics.py           Olay kaydı, feedback ve metrik özetleri
   static/

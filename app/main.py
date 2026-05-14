@@ -17,12 +17,15 @@ from app.schemas import (
     KnowledgeDocumentRequest,
     KnowledgeDocumentResponse,
     LoginRequest,
-    RegisterRequest,
+    PasswordResetRequest,
     TicketDraftRequest,
     TicketDraftResponse,
     Topic,
     TopicsResponse,
+    UserCreateRequest,
+    UserListResponse,
     UserProfile,
+    UserStatusRequest,
 )
 from app.services.analytics import AnalyticsLogger
 from app.services.auth import AuthService
@@ -39,7 +42,7 @@ response_generator = ResponseGenerator(knowledge_base, settings.min_confidence)
 analytics = AnalyticsLogger(settings.log_dir)
 enterprise = EnterpriseService(analytics, knowledge_base)
 auth_service = AuthService(
-    settings.log_dir / "users.json",
+    settings.log_dir / "kayra.sqlite3",
     settings.auth_secret,
     settings.admin_username,
     settings.admin_password,
@@ -104,15 +107,6 @@ def topics() -> TopicsResponse:
     return TopicsResponse(topics=TOPICS)
 
 
-@app.post("/api/auth/register", response_model=AuthResponse)
-def register(request: RegisterRequest) -> AuthResponse:
-    try:
-        user = auth_service.register(request.username, request.password, request.email, request.display_name)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return AuthResponse(token=auth_service.create_token(user), user=user)
-
-
 @app.post("/api/auth/login", response_model=AuthResponse)
 def login(request: LoginRequest) -> AuthResponse:
     try:
@@ -124,6 +118,85 @@ def login(request: LoginRequest) -> AuthResponse:
 
 @app.get("/api/auth/me", response_model=UserProfile)
 def me(user: UserProfile = Depends(current_user)) -> UserProfile:
+    return user
+
+
+@app.get("/api/admin/users", response_model=UserListResponse)
+def list_users(_: UserProfile = Depends(admin_user)) -> UserListResponse:
+    return UserListResponse(users=auth_service.list_users())
+
+
+@app.post("/api/admin/users", response_model=UserProfile)
+def create_user(request: UserCreateRequest, admin: UserProfile = Depends(admin_user)) -> UserProfile:
+    try:
+        user = auth_service.create_user(
+            username=request.username,
+            password=request.password,
+            email=request.email,
+            display_name=request.display_name,
+            role=request.role,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    analytics.log_chat(
+        {
+            "session_id": "admin",
+            "message": f"user_created:{user.username}:{user.role}",
+            "confidence": 1,
+            "handoff_recommended": False,
+            "source_count": 0,
+            "domain": "Admin",
+            "risk_level": "düşük",
+            "response_time_ms": 1,
+            "username": admin.username,
+        }
+    )
+    return user
+
+
+@app.post("/api/admin/users/{username}/password", response_model=UserProfile)
+def reset_user_password(username: str, request: PasswordResetRequest, admin: UserProfile = Depends(admin_user)) -> UserProfile:
+    try:
+        user = auth_service.reset_password(username, request.password)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    analytics.log_chat(
+        {
+            "session_id": "admin",
+            "message": f"user_password_reset:{username}",
+            "confidence": 1,
+            "handoff_recommended": False,
+            "source_count": 0,
+            "domain": "Admin",
+            "risk_level": "orta",
+            "response_time_ms": 1,
+            "username": admin.username,
+        }
+    )
+    return user
+
+
+@app.patch("/api/admin/users/{username}/status", response_model=UserProfile)
+def set_user_status(username: str, request: UserStatusRequest, admin: UserProfile = Depends(admin_user)) -> UserProfile:
+    if username.strip().lower() == admin.username and not request.active:
+        raise HTTPException(status_code=400, detail="Kendi admin hesabınızı pasifleştiremezsiniz.")
+    try:
+        user = auth_service.set_user_active(username, request.active)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    analytics.log_chat(
+        {
+            "session_id": "admin",
+            "message": f"user_status:{username}:{request.active}",
+            "confidence": 1,
+            "handoff_recommended": False,
+            "source_count": 0,
+            "domain": "Admin",
+            "risk_level": "orta",
+            "response_time_ms": 1,
+            "username": admin.username,
+        }
+    )
     return user
 
 
