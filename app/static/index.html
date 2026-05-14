@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Kayra AI Assistant</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <main class="workspace">
+      <aside class="sidebar" aria-label="Kayra kontrol paneli">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true">K</div>
+          <div class="brand-copy">
+            <h1>Kayra</h1>
+            <p>AI Assistant</p>
+          </div>
+        </div>
+
+        <section class="control-group">
+          <div class="section-title">
+            <span>Rol</span>
+            <strong id="active-role-label">Genel</strong>
+          </div>
+          <div class="role-switch" role="group" aria-label="Rol seçimi">
+            <button class="role-button active" type="button" data-role="general">Genel</button>
+            <button class="role-button" type="button" data-role="employee">Çalışan</button>
+            <button class="role-button" type="button" data-role="it">IT</button>
+            <button class="role-button" type="button" data-role="hr">İK</button>
+            <button class="role-button" type="button" data-role="support">Destek</button>
+          </div>
+        </section>
+
+        <section class="control-group">
+          <div class="section-title">
+            <span>Konu Başlıkları</span>
+            <strong id="topic-count">-</strong>
+          </div>
+          <div id="topic-list" class="topic-list"></div>
+        </section>
+
+        <section class="control-group metrics">
+          <div class="metric">
+            <span>Sistem</span>
+            <strong id="health-status">Kontrol</strong>
+          </div>
+          <div class="metric">
+            <span>Bilgi Tabanı</span>
+            <strong id="knowledge-count">-</strong>
+          </div>
+          <div class="metric">
+            <span>Oturum</span>
+            <strong id="session-label">Yeni</strong>
+          </div>
+        </section>
+      </aside>
+
+      <section class="chat-panel" aria-label="Kayra sohbet ekranı">
+        <header class="chat-header">
+          <div>
+            <div class="eyebrow">Kayra AI Assistant</div>
+            <h2>Kurumsal Bilgi Asistanı</h2>
+          </div>
+          <div class="header-actions">
+            <span id="connection-copy" class="status-pill">Hazırlanıyor</span>
+            <button id="clear-chat" class="icon-button" title="Sohbeti temizle" aria-label="Sohbeti temizle">×</button>
+          </div>
+        </header>
+
+        <div id="messages" class="messages" aria-live="polite"></div>
+
+        <footer class="composer-bar">
+          <form id="chat-form" class="composer">
+            <textarea id="message-input" name="message" rows="1" placeholder="Kayra'ya yazın" required></textarea>
+            <button type="submit" id="send-button">Gönder</button>
+          </form>
+        </footer>
+      </section>
+    </main>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>
