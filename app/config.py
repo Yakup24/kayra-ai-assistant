@@ -9,6 +9,9 @@ class Settings:
     log_dir: Path = Path(os.getenv("LOG_DIR", "runtime"))
     min_confidence: float = float(os.getenv("MIN_CONFIDENCE", "0.22"))
     top_k: int = int(os.getenv("TOP_K", "4"))
+    auth_secret: str = os.getenv("AUTH_SECRET", "change-this-kayra-dev-secret")
+    admin_username: str = os.getenv("ADMIN_USERNAME", "admin")
+    admin_password: str = os.getenv("ADMIN_PASSWORD", "KayraAdmin2026!")
 
 
 @lru_cache

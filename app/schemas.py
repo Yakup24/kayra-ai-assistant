@@ -7,6 +7,7 @@ class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=2000)
     session_id: Optional[str] = None
     user_role: Optional[str] = Field(default="general", max_length=40)
+    online_enabled: bool = False
 
 
 class Source(BaseModel):
@@ -142,3 +143,41 @@ class TicketDraftResponse(BaseModel):
     summary: str
     acceptance_criteria: List[str]
     escalation_required: bool
+
+
+class RegisterRequest(BaseModel):
+    username: str = Field(..., min_length=3, max_length=40)
+    email: Optional[str] = Field(default=None, max_length=120)
+    password: str = Field(..., min_length=6, max_length=120)
+    display_name: Optional[str] = Field(default=None, max_length=80)
+
+
+class LoginRequest(BaseModel):
+    username: str = Field(..., min_length=3, max_length=80)
+    password: str = Field(..., min_length=1, max_length=120)
+
+
+class UserProfile(BaseModel):
+    id: str
+    username: str
+    email: Optional[str] = None
+    display_name: str
+    role: str
+
+
+class AuthResponse(BaseModel):
+    token: str
+    user: UserProfile
+
+
+class ConversationMessage(BaseModel):
+    role: str
+    content: str
+    created_at: str
+    domain: Optional[str] = None
+    confidence: Optional[float] = None
+
+
+class ConversationHistoryResponse(BaseModel):
+    session_id: str
+    messages: List[ConversationMessage]

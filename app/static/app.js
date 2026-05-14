@@ -1,7 +1,21 @@
+const authScreen = document.querySelector("#auth-screen");
+const appShell = document.querySelector("#app-shell");
+const authForm = document.querySelector("#auth-form");
+const authTabs = document.querySelectorAll(".auth-tab");
+const authSubmit = document.querySelector("#auth-submit");
+const authMessage = document.querySelector("#auth-message");
+const authUsername = document.querySelector("#auth-username");
+const authPassword = document.querySelector("#auth-password");
+const authEmail = document.querySelector("#auth-email");
+const authDisplayName = document.querySelector("#auth-display-name");
+const logoutButton = document.querySelector("#logout-button");
+const accountName = document.querySelector("#account-name");
+
 const messages = document.querySelector("#messages");
 const form = document.querySelector("#chat-form");
 const input = document.querySelector("#message-input");
 const sendButton = document.querySelector("#send-button");
+const onlineToggle = document.querySelector("#online-toggle");
 const sessionLabel = document.querySelector("#session-label");
 const healthStatus = document.querySelector("#health-status");
 const knowledgeCount = document.querySelector("#knowledge-count");
@@ -20,6 +34,7 @@ const documentForm = document.querySelector("#document-form");
 const documentTitle = document.querySelector("#document-title");
 const documentContent = document.querySelector("#document-content");
 const documentOutput = document.querySelector("#document-output");
+const controlPanel = document.querySelector(".control-panel");
 
 const roleLabels = {
   general: "Genel",
@@ -27,8 +42,12 @@ const roleLabels = {
   it: "IT",
   hr: "İK",
   support: "Destek",
+  admin: "Admin",
 };
 
+let authMode = "login";
+let authToken = localStorage.getItem("kayra_token") || "";
+let currentUser = null;
 let sessionId = localStorage.getItem("kayra_session_id") || crypto.randomUUID();
 let selectedRole = localStorage.getItem("kayra_role") || "general";
 
@@ -36,11 +55,115 @@ localStorage.setItem("kayra_session_id", sessionId);
 sessionLabel.textContent = sessionId.slice(0, 8);
 setActiveRole(selectedRole);
 
+function authHeaders() {
+  return authToken ? { Authorization: `Bearer ${authToken}` } : {};
+}
+
 function createElement(tag, className, text) {
   const element = document.createElement(tag);
   if (className) element.className = className;
   if (text !== undefined) element.textContent = text;
   return element;
+}
+
+function setAuthMode(mode) {
+  authMode = mode;
+  authTabs.forEach((tab) => tab.classList.toggle("active", tab.dataset.authMode === mode));
+  document.querySelectorAll(".register-only").forEach((item) => {
+    item.classList.toggle("hidden", mode !== "register");
+  });
+  authSubmit.textContent = mode === "register" ? "Kayıt Ol" : mode === "admin" ? "Admin Girişi" : "Giriş Yap";
+  authMessage.textContent = "";
+  if (mode === "admin") {
+    authUsername.value = authUsername.value || "admin";
+  }
+}
+
+async function submitAuth(event) {
+  event.preventDefault();
+  authMessage.textContent = "";
+
+  const endpoint = authMode === "register" ? "/api/auth/register" : "/api/auth/login";
+  const payload = {
+    username: authUsername.value.trim(),
+    password: authPassword.value,
+  };
+  if (authMode === "register") {
+    payload.email = authEmail.value.trim() || null;
+    payload.display_name = authDisplayName.value.trim() || null;
+  }
+
+  try {
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || "Giriş başarısız");
+
+    authToken = data.token;
+    currentUser = data.user;
+    localStorage.setItem("kayra_token", authToken);
+    await enterApp();
+  } catch (error) {
+    authMessage.textContent = error.message;
+  }
+}
+
+async function restoreSession() {
+  if (!authToken) {
+    showAuth();
+    return;
+  }
+  try {
+    const response = await fetch("/api/auth/me", { headers: authHeaders() });
+    if (!response.ok) throw new Error("Oturum yok");
+    currentUser = await response.json();
+    await enterApp();
+  } catch (error) {
+    localStorage.removeItem("kayra_token");
+    authToken = "";
+    showAuth();
+  }
+}
+
+function showAuth() {
+  authScreen.classList.remove("hidden");
+  appShell.classList.add("hidden");
+  setAuthMode(authMode);
+}
+
+async function enterApp() {
+  authScreen.classList.add("hidden");
+  appShell.classList.remove("hidden");
+  const display = currentUser.display_name || currentUser.username;
+  accountName.textContent = `${display} · ${roleLabels[currentUser.role] || currentUser.role}`;
+  selectedRole = currentUser.role === "admin" ? "admin" : selectedRole;
+  setActiveRole(selectedRole);
+  applyModeVisibility();
+  await Promise.all([checkHealth(), loadTopics()]);
+  if (currentUser.role === "admin") {
+    await Promise.all([loadOverview(), loadAudit()]);
+  }
+  await loadConversationHistory();
+  if (!messages.children.length) {
+    addMessage("Merhaba, ben Kayra. Kayıtlı oturumla sohbet geçmişini tutabilir, kaynaklı cevap ve aksiyon planı hazırlayabilirim.", "assistant");
+  }
+}
+
+function applyModeVisibility() {
+  const isAdmin = currentUser?.role === "admin";
+  controlPanel.classList.toggle("hidden", !isAdmin);
+  appShell.classList.toggle("user-mode", !isAdmin);
+}
+
+function logout() {
+  localStorage.removeItem("kayra_token");
+  authToken = "";
+  currentUser = null;
+  messages.replaceChildren();
+  showAuth();
 }
 
 function addMessage(text, role = "assistant") {
@@ -107,8 +230,10 @@ function addFeedback(message) {
     button.addEventListener("click", async () => {
       await sendFeedback(message, item.rating);
       row.replaceChildren(document.createTextNode("Geri bildirim alındı"));
-      loadOverview();
-      loadAudit();
+      if (currentUser?.role === "admin") {
+        loadOverview();
+        loadAudit();
+      }
     });
     row.appendChild(button);
   });
@@ -119,30 +244,35 @@ function addFeedback(message) {
 async function sendFeedback(message, rating) {
   await fetch("/api/feedback", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify({ session_id: sessionId, message, rating }),
   });
 }
 
 async function submitMessage(message) {
   const text = message.trim();
-  if (!text) return;
+  if (!text || !authToken) return;
 
   addMessage(text, "user");
   input.value = "";
   input.style.height = "auto";
   sendButton.disabled = true;
-  sendButton.textContent = "Analiz";
+  sendButton.textContent = onlineToggle.checked ? "Online" : "Analiz";
 
   try {
     const response = await fetch("/api/chat", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: text, session_id: sessionId, user_role: selectedRole }),
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      body: JSON.stringify({
+        message: text,
+        session_id: sessionId,
+        user_role: selectedRole,
+        online_enabled: onlineToggle.checked,
+      }),
     });
-    if (!response.ok) throw new Error("Yanıt alınamadı");
-
     const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || "Yanıt alınamadı");
+
     sessionId = data.session_id;
     localStorage.setItem("kayra_session_id", sessionId);
     sessionLabel.textContent = sessionId.slice(0, 8);
@@ -152,10 +282,12 @@ async function submitMessage(message) {
     addSources(data.sources || []);
     addActions(data.next_actions || [], data.follow_up_suggestions || []);
     addFeedback(text);
-    loadOverview();
-    loadAudit();
+    if (currentUser?.role === "admin") {
+      loadOverview();
+      loadAudit();
+    }
   } catch (error) {
-    addMessage("Teknik bir sorun oluştu. Biraz sonra tekrar deneyebilirsiniz.", "assistant");
+    addMessage(error.message || "Teknik bir sorun oluştu. Biraz sonra tekrar deneyebilirsiniz.", "assistant");
   } finally {
     sendButton.disabled = false;
     sendButton.textContent = "Gönder";
@@ -195,7 +327,7 @@ async function checkHealth() {
     const data = await response.json();
     healthStatus.textContent = "Çevrimiçi";
     knowledgeCount.textContent = `${data.indexed_chunks} parça`;
-    connectionCopy.textContent = "Enterprise mod";
+    connectionCopy.textContent = currentUser?.role === "admin" ? "Admin mod" : "Kullanıcı mod";
   } catch (error) {
     healthStatus.textContent = "Bağlantı yok";
     knowledgeCount.textContent = "-";
@@ -204,7 +336,8 @@ async function checkHealth() {
 }
 
 async function loadOverview() {
-  const response = await fetch("/api/enterprise/overview");
+  const response = await fetch("/api/enterprise/overview", { headers: authHeaders() });
+  if (!response.ok) return;
   const data = await response.json();
 
   document.querySelector("#product-name").textContent = data.product_name;
@@ -256,7 +389,8 @@ function renderSecurity(items) {
 }
 
 async function loadAudit() {
-  const response = await fetch("/api/admin/audit");
+  const response = await fetch("/api/admin/audit", { headers: authHeaders() });
+  if (!response.ok) return;
   const data = await response.json();
   const list = document.querySelector("#audit-list");
   list.replaceChildren();
@@ -274,6 +408,16 @@ async function loadAudit() {
   });
 }
 
+async function loadConversationHistory() {
+  const response = await fetch(`/api/conversations/${sessionId}`, { headers: authHeaders() });
+  if (!response.ok) return;
+  const data = await response.json();
+  messages.replaceChildren();
+  data.messages.forEach((item) => {
+    addMessage(item.content, item.role === "user" ? "user" : "assistant");
+  });
+}
+
 async function createTicketDraft(event) {
   event.preventDefault();
   const message = ticketMessage.value.trim();
@@ -281,7 +425,7 @@ async function createTicketDraft(event) {
 
   const response = await fetch("/api/tickets/draft", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify({ message, priority: ticketPriority.value }),
   });
   const draft = await response.json();
@@ -299,10 +443,14 @@ async function addKnowledgeDocument(event) {
 
   const response = await fetch("/api/admin/documents", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify({ title, content, category: "Admin" }),
   });
   const result = await response.json();
+  if (!response.ok) {
+    documentOutput.textContent = result.detail || "Doküman eklenemedi";
+    return;
+  }
   documentOutput.textContent = `${result.status}: ${result.indexed_chunks} parça indekslendi`;
   documentTitle.value = "";
   documentContent.value = "";
@@ -314,6 +462,10 @@ async function addKnowledgeDocument(event) {
 function scrollToLatest() {
   messages.scrollTop = messages.scrollHeight;
 }
+
+authTabs.forEach((tab) => tab.addEventListener("click", () => setAuthMode(tab.dataset.authMode)));
+authForm.addEventListener("submit", submitAuth);
+logoutButton.addEventListener("click", logout);
 
 form.addEventListener("submit", (event) => {
   event.preventDefault();
@@ -347,8 +499,5 @@ refreshOverview.addEventListener("click", () => {
 ticketForm.addEventListener("submit", createTicketDraft);
 documentForm.addEventListener("submit", addKnowledgeDocument);
 
-checkHealth();
-loadTopics();
-loadOverview();
-loadAudit();
-addMessage("Merhaba, ben Kayra. Kurumsal bilgi tabanından kaynaklı yanıt, risk skoru ve aksiyon planı hazırlayabilirim.", "assistant");
+setAuthMode("login");
+restoreSession();

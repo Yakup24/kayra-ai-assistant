@@ -7,7 +7,36 @@
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
   <body>
-    <main class="app-shell">
+    <section id="auth-screen" class="auth-screen">
+      <div class="auth-card">
+        <div class="brand auth-brand">
+          <div class="brand-mark" aria-hidden="true">K</div>
+          <div>
+            <h1>Kayra</h1>
+            <p>Enterprise Assistant</p>
+          </div>
+        </div>
+
+        <div class="auth-tabs" role="group" aria-label="Giriş tipi">
+          <button class="auth-tab active" type="button" data-auth-mode="login">Kullanıcı</button>
+          <button class="auth-tab" type="button" data-auth-mode="register">Kayıt</button>
+          <button class="auth-tab" type="button" data-auth-mode="admin">Admin</button>
+        </div>
+
+        <form id="auth-form" class="auth-form">
+          <input id="auth-display-name" class="register-only" type="text" placeholder="Ad Soyad" />
+          <input id="auth-email" class="register-only" type="email" placeholder="E-posta" />
+          <input id="auth-username" type="text" placeholder="Kullanıcı adı" autocomplete="username" required />
+          <input id="auth-password" type="password" placeholder="Şifre" autocomplete="current-password" required />
+          <button id="auth-submit" type="submit">Giriş Yap</button>
+        </form>
+
+        <p id="auth-message" class="auth-message"></p>
+        <p class="auth-hint">Admin varsayılanı: <strong>admin</strong> / <strong>KayraAdmin2026!</strong></p>
+      </div>
+    </section>
+
+    <main id="app-shell" class="app-shell hidden">
       <aside class="nav-panel" aria-label="Kayra navigasyon">
         <div class="brand">
           <div class="brand-mark" aria-hidden="true">K</div>
@@ -16,6 +45,14 @@
             <p>Enterprise Assistant</p>
           </div>
         </div>
+
+        <section class="panel-block account-block">
+          <div>
+            <span>Oturum</span>
+            <strong id="account-name">-</strong>
+          </div>
+          <button id="logout-button" type="button">Çıkış</button>
+        </section>
 
         <section class="panel-block">
           <div class="block-title">
@@ -76,6 +113,10 @@
         <div id="messages" class="messages" aria-live="polite"></div>
 
         <footer class="composer-wrap">
+          <label class="online-toggle">
+            <input id="online-toggle" type="checkbox" />
+            <span>Online bilgi ara</span>
+          </label>
           <form id="chat-form" class="composer">
             <textarea id="message-input" name="message" rows="1" placeholder="Kayra'ya kurumsal destek sorunuzu yazın" required></textarea>
             <button id="send-button" type="submit">Gönder</button>

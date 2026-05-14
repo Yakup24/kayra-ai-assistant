@@ -48,17 +48,36 @@ python -m uvicorn app.main:app --reload --port 8001
 ## Nasıl Kullanılır?
 
 1. Uygulamayı açın: `http://127.0.0.1:8000` veya bu makinede `http://127.0.0.1:8001`
-2. Sol panelden rol seçin: `Genel`, `Çalışan`, `IT`, `İK` veya `Destek`
-3. Operasyon başlıklarından hazır bir konu seçin ya da sohbet kutusuna sorunuzu yazın
-4. Kayra yanıtla birlikte kaynakları, güven skorunu, risk seviyesini ve sonraki aksiyonları gösterir
-5. Sağdaki Control Center üzerinden metrikleri, entegrasyon durumlarını, audit akışını, ticket taslaklarını ve bilgi tabanı eklemeyi kullanın
+2. Normal kullanıcı için `Kayıt` sekmesinden hesap oluşturun
+3. Kullanıcı girişiyle sohbet ekranını kullanın
+4. Sol panelden rol seçin: `Genel`, `Çalışan`, `IT`, `İK` veya `Destek`
+5. `Online bilgi ara` seçeneğini açarsanız Kayra web kaynaklarından kısa ek bağlam çekmeyi dener
+6. Admin girişiyle Control Center, audit, ticket studio ve bilgi tabanı yönetimi açılır
+
+Varsayılan geliştirme admin hesabı:
+
+```text
+Kullanıcı adı: admin
+Şifre: KayraAdmin2026!
+```
+
+Üretimde `.env` ile `AUTH_SECRET`, `ADMIN_USERNAME` ve `ADMIN_PASSWORD` değerlerini değiştirin.
 
 ## Chat API
 
 ```bash
+curl -X POST http://127.0.0.1:8000/api/auth/login ^
+  -H "Content-Type: application/json" ^
+  -d "{\"username\":\"admin\",\"password\":\"KayraAdmin2026!\"}"
+```
+
+Sonra dönen token ile:
+
+```bash
 curl -X POST http://127.0.0.1:8000/api/chat ^
   -H "Content-Type: application/json" ^
-  -d "{\"message\":\"İade süreci nasıl işliyor?\",\"user_role\":\"support\"}"
+  -H "Authorization: Bearer TOKEN" ^
+  -d "{\"message\":\"İade süreci nasıl işliyor?\",\"user_role\":\"support\",\"online_enabled\":false}"
 ```
 
 Örnek yanıt:
@@ -94,13 +113,13 @@ curl -X POST http://127.0.0.1:8000/api/chat ^
 Platform özeti:
 
 ```bash
-curl http://127.0.0.1:8000/api/enterprise/overview
+curl http://127.0.0.1:8000/api/enterprise/overview -H "Authorization: Bearer TOKEN"
 ```
 
 Audit akışı:
 
 ```bash
-curl http://127.0.0.1:8000/api/admin/audit
+curl http://127.0.0.1:8000/api/admin/audit -H "Authorization: Bearer TOKEN"
 ```
 
 Ticket taslağı:
@@ -108,6 +127,7 @@ Ticket taslağı:
 ```bash
 curl -X POST http://127.0.0.1:8000/api/tickets/draft ^
   -H "Content-Type: application/json" ^
+  -H "Authorization: Bearer TOKEN" ^
   -d "{\"message\":\"VPN erişim sorunu var\",\"priority\":\"acil\"}"
 ```
 
@@ -116,6 +136,7 @@ Bilgi tabanına doküman ekleme:
 ```bash
 curl -X POST http://127.0.0.1:8000/api/admin/documents ^
   -H "Content-Type: application/json" ^
+  -H "Authorization: Bearer TOKEN" ^
   -d "{\"title\":\"Yeni Politika\",\"content\":\"En az 20 karakterlik kurumsal bilgi metni\",\"category\":\"İK\"}"
 ```
 
