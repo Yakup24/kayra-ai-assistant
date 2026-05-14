@@ -206,6 +206,11 @@ Bu proje MIT lisansı ile yayınlanır.
 
 Detaylar için [LICENSE](LICENSE) ve [LICENSE.html](LICENSE.html) dosyalarına bakın.
 
+Kişisel MIT lisans profili `remy/mit-license` yapısına uyumlu olacak şekilde ayrıca tutulur:
+
+- [users/yakup24.json](users/yakup24.json)
+- [license.config.json](license.config.json)
+
 ## Üretime Geçerken
 
 Bu prototip üretim mimarisine yakın bir iskelet sunar. Gerçek kurumsal ortam için şu geliştirmeler önerilir:
