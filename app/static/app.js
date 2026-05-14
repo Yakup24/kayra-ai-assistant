@@ -458,7 +458,7 @@ async function createUser(event) {
     return;
   }
 
-  userOutput.textContent = `${result.username} oluşturuldu. Geçici şifreyi kullanıcıya güvenli kanaldan iletin.`;
+  userOutput.textContent = `${result.username} kaydı veritabanına işlendi. Geçici şifre güvenli kanaldan iletilmeli.`;
   newUserDisplay.value = "";
   newUserEmail.value = "";
   newUserUsername.value = "";
