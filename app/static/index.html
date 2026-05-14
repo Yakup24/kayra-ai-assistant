@@ -3,26 +3,26 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Kayra AI Assistant</title>
+    <title>Kayra Enterprise Assistant</title>
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
   <body>
-    <main class="workspace">
-      <aside class="sidebar" aria-label="Kayra kontrol paneli">
+    <main class="app-shell">
+      <aside class="nav-panel" aria-label="Kayra navigasyon">
         <div class="brand">
           <div class="brand-mark" aria-hidden="true">K</div>
-          <div class="brand-copy">
+          <div>
             <h1>Kayra</h1>
-            <p>AI Assistant</p>
+            <p>Enterprise Assistant</p>
           </div>
         </div>
 
-        <section class="control-group">
-          <div class="section-title">
-            <span>Rol</span>
+        <section class="panel-block">
+          <div class="block-title">
+            <span>Rol Bağlamı</span>
             <strong id="active-role-label">Genel</strong>
           </div>
-          <div class="role-switch" role="group" aria-label="Rol seçimi">
+          <div class="role-grid" role="group" aria-label="Rol seçimi">
             <button class="role-button active" type="button" data-role="general">Genel</button>
             <button class="role-button" type="button" data-role="employee">Çalışan</button>
             <button class="role-button" type="button" data-role="it">IT</button>
@@ -31,51 +31,115 @@
           </div>
         </section>
 
-        <section class="control-group">
-          <div class="section-title">
-            <span>Konu Başlıkları</span>
-            <strong id="topic-count">-</strong>
+        <section class="panel-block topics-block">
+          <div class="block-title">
+            <span>Operasyon Başlıkları</span>
+            <strong id="topic-count">0</strong>
           </div>
           <div id="topic-list" class="topic-list"></div>
         </section>
 
-        <section class="control-group metrics">
-          <div class="metric">
+        <section class="panel-block system-block">
+          <div class="system-row">
             <span>Sistem</span>
             <strong id="health-status">Kontrol</strong>
           </div>
-          <div class="metric">
-            <span>Bilgi Tabanı</span>
+          <div class="system-row">
+            <span>İndeks</span>
             <strong id="knowledge-count">-</strong>
           </div>
-          <div class="metric">
+          <div class="system-row">
             <span>Oturum</span>
             <strong id="session-label">Yeni</strong>
           </div>
         </section>
       </aside>
 
-      <section class="chat-panel" aria-label="Kayra sohbet ekranı">
+      <section class="chat-panel" aria-label="Kayra sohbet">
         <header class="chat-header">
           <div>
-            <div class="eyebrow">Kayra AI Assistant</div>
-            <h2>Kurumsal Bilgi Asistanı</h2>
+            <span class="eyebrow">Kayra Enterprise Assistant</span>
+            <h2>Kurumsal AI Destek Platformu</h2>
           </div>
           <div class="header-actions">
             <span id="connection-copy" class="status-pill">Hazırlanıyor</span>
-            <button id="clear-chat" class="icon-button" title="Sohbeti temizle" aria-label="Sohbeti temizle">×</button>
+            <button id="clear-chat" class="icon-button" type="button" title="Sohbeti temizle" aria-label="Sohbeti temizle">×</button>
           </div>
         </header>
 
         <div id="messages" class="messages" aria-live="polite"></div>
 
-        <footer class="composer-bar">
+        <footer class="composer-wrap">
           <form id="chat-form" class="composer">
-            <textarea id="message-input" name="message" rows="1" placeholder="Kayra'ya yazın" required></textarea>
-            <button type="submit" id="send-button">Gönder</button>
+            <textarea id="message-input" name="message" rows="1" placeholder="Kayra'ya kurumsal destek sorunuzu yazın" required></textarea>
+            <button id="send-button" type="submit">Gönder</button>
           </form>
         </footer>
       </section>
+
+      <aside class="control-panel" aria-label="Enterprise control center">
+        <section class="control-section product-section">
+          <div>
+            <span class="eyebrow">Control Center</span>
+            <h2 id="product-name">Kayra Enterprise</h2>
+            <p id="product-tagline">Platform hazırlanıyor.</p>
+          </div>
+          <strong id="product-maturity" class="maturity">v0.2</strong>
+        </section>
+
+        <section class="control-section">
+          <div class="section-head">
+            <h3>Metrikler</h3>
+            <button id="refresh-overview" class="ghost-button" type="button">Yenile</button>
+          </div>
+          <div id="metrics-grid" class="metrics-grid"></div>
+        </section>
+
+        <section class="control-section split-lists">
+          <div>
+            <h3>Yetenekler</h3>
+            <div id="capability-list" class="stack-list"></div>
+          </div>
+          <div>
+            <h3>Entegrasyonlar</h3>
+            <div id="integration-list" class="stack-list"></div>
+          </div>
+        </section>
+
+        <section class="control-section">
+          <h3>Güvenlik</h3>
+          <div id="security-list" class="security-list"></div>
+        </section>
+
+        <section class="control-section tool-section">
+          <h3>Ticket Studio</h3>
+          <form id="ticket-form" class="tool-form">
+            <textarea id="ticket-message" rows="3" placeholder="Talep metni"></textarea>
+            <select id="ticket-priority" aria-label="Öncelik">
+              <option value="normal">Normal</option>
+              <option value="acil">Acil</option>
+              <option value="kritik">Kritik</option>
+            </select>
+            <button type="submit">Taslak Oluştur</button>
+          </form>
+          <div id="ticket-output" class="tool-output"></div>
+        </section>
+
+        <section class="control-section tool-section">
+          <h3>Bilgi Tabanı</h3>
+          <form id="document-form" class="tool-form">
+            <input id="document-title" type="text" placeholder="Doküman başlığı" />
+            <textarea id="document-content" rows="4" placeholder="Kurumsal bilgi metni"></textarea>
+            <button type="submit">İndekse Ekle</button>
+          </form>
+          <div id="document-output" class="tool-output"></div>
+        </section>
+
+        <section class="control-section">
+          <h3>Audit Akışı</h3>
+          <div id="audit-list" class="audit-list"></div>
+        </section>
+      </aside>
     </main>
 
     <script src="/static/app.js"></script>

@@ -61,3 +61,84 @@ class Topic(BaseModel):
 
 class TopicsResponse(BaseModel):
     topics: List[Topic]
+
+
+class PlatformMetric(BaseModel):
+    label: str
+    value: str
+    trend: str
+
+
+class Capability(BaseModel):
+    title: str
+    description: str
+    status: str
+
+
+class IntegrationStatus(BaseModel):
+    name: str
+    category: str
+    status: str
+    description: str
+
+
+class SecurityControl(BaseModel):
+    title: str
+    level: str
+    description: str
+
+
+class RoadmapItem(BaseModel):
+    phase: str
+    title: str
+    status: str
+    owner: str
+
+
+class AuditEvent(BaseModel):
+    created_at: str
+    event_type: str
+    summary: str
+    risk_level: str
+
+
+class EnterpriseOverviewResponse(BaseModel):
+    product_name: str
+    tagline: str
+    maturity: str
+    metrics: List[PlatformMetric]
+    capabilities: List[Capability]
+    integrations: List[IntegrationStatus]
+    security_controls: List[SecurityControl]
+    roadmap: List[RoadmapItem]
+
+
+class AuditTrailResponse(BaseModel):
+    events: List[AuditEvent]
+
+
+class KnowledgeDocumentRequest(BaseModel):
+    title: str = Field(..., min_length=3, max_length=120)
+    content: str = Field(..., min_length=20, max_length=12000)
+    category: str = Field(default="Kurumsal", max_length=60)
+
+
+class KnowledgeDocumentResponse(BaseModel):
+    status: str
+    path: str
+    indexed_chunks: int
+
+
+class TicketDraftRequest(BaseModel):
+    message: str = Field(..., min_length=3, max_length=2000)
+    priority: str = Field(default="normal", max_length=30)
+    requester: Optional[str] = Field(default=None, max_length=120)
+
+
+class TicketDraftResponse(BaseModel):
+    title: str
+    priority: str
+    category: str
+    summary: str
+    acceptance_criteria: List[str]
+    escalation_required: bool

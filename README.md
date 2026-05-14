@@ -1,19 +1,22 @@
-# Kayra AI Assistant
+# Kayra Enterprise Assistant
 
-Türkçe çalışan, kaynaklı cevap üreten ve GitHub'a yüklemeye hazır bir chatbot başlangıç projesi.
+Türkçe kurumsal destek süreçleri için geliştirilmiş, kaynaklı cevap üreten RAG tabanlı AI destek platformu prototipi.
 
-Kurumsal kullanım, müşteri desteği, İK/IT destek süreçleri ve doküman tabanlı soru-cevap senaryoları için tasarlanmış FastAPI tabanlı Türkçe RAG asistanı.
+Kayra; müşteri destek, IT, İK, uyumluluk, operasyon, ticket taslağı, audit ve admin bilgi tabanı yönetimi gibi kurumsal akışları tek uygulamada gösteren FastAPI tabanlı bir enterprise assistant örneğidir.
 
-Bu MVP şunları içerir:
+## Özellikler
 
 - FastAPI tabanlı chat API
-- Anahtarsız çalışan basit RAG/arama katmanı
+- Anahtarsız çalışan RAG/arama katmanı
 - Türkçe metin normalizasyonu ve BM25 benzeri sıralama
 - Kaynak gösterimli cevaplar
-- Kurumsal görünümlü web sohbet arayüzü
+- Enterprise control center arayüzü
 - Rol seçimi: genel, çalışan, IT, İK ve destek
 - Alan, güven skoru, risk seviyesi ve sonraki aksiyon üretimi
-- API'den gelen konu başlıkları
+- Ticket taslağı üretimi
+- Admin doküman ekleme ve yeniden indeksleme
+- Audit trail ve operasyon metrikleri
+- Entegrasyon durum paneli: Graph, Jira/ServiceNow, Qdrant/pgvector, SSO
 - KVKK/GDPR için temel veri maskeleme örnekleri
 - Feedback endpoint'i
 - Docker desteği
@@ -36,31 +39,37 @@ Tarayıcıda açın:
 http://127.0.0.1:8000
 ```
 
-## API Kullanımı
+Bu makinede 8000 doluysa:
+
+```bash
+python -m uvicorn app.main:app --reload --port 8001
+```
+
+## Chat API
 
 ```bash
 curl -X POST http://127.0.0.1:8000/api/chat ^
   -H "Content-Type: application/json" ^
-  -d "{\"message\":\"İade süreci nasıl işliyor?\"}"
+  -d "{\"message\":\"İade süreci nasıl işliyor?\",\"user_role\":\"support\"}"
 ```
 
 Örnek yanıt:
 
 ```json
 {
-  "answer": "Kaynaklara göre iade talebi...",
+  "answer": "Müşteri destek kaynaklarına göre...",
   "confidence": 0.82,
+  "domain": "Müşteri destek",
+  "risk_level": "düşük",
+  "response_time_ms": 12,
   "sources": [
     {
       "title": "E-Ticaret Müşteri Desteği",
       "path": "data/knowledge/e_ticaret.md",
-      "score": 6.4
+      "score": 6.4,
+      "excerpt": "Müşteri ürünü teslim aldıktan sonra..."
     }
   ],
-  "domain": "Müşteri destek",
-  "risk_level": "düşük",
-  "response_time_ms": 12,
-  "follow_up_suggestions": ["Canlı temsilciye aktar", "Benzer konu başlıklarını göster"],
   "next_actions": [
     {
       "label": "İade şartları",
@@ -72,20 +81,51 @@ curl -X POST http://127.0.0.1:8000/api/chat ^
 }
 ```
 
+## Enterprise API'leri
+
+Platform özeti:
+
+```bash
+curl http://127.0.0.1:8000/api/enterprise/overview
+```
+
+Audit akışı:
+
+```bash
+curl http://127.0.0.1:8000/api/admin/audit
+```
+
+Ticket taslağı:
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/tickets/draft ^
+  -H "Content-Type: application/json" ^
+  -d "{\"message\":\"VPN erişim sorunu var\",\"priority\":\"acil\"}"
+```
+
+Bilgi tabanına doküman ekleme:
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/admin/documents ^
+  -H "Content-Type: application/json" ^
+  -d "{\"title\":\"Yeni Politika\",\"content\":\"En az 20 karakterlik kurumsal bilgi metni\",\"category\":\"İK\"}"
+```
+
 ## Proje Yapısı
 
 ```text
 app/
-  main.py                  FastAPI uygulaması
+  main.py                  FastAPI uygulaması ve endpointler
   schemas.py               API şemaları
   config.py                Ortam ve yol ayarları
   services/
     rag.py                 Doküman yükleme, parçalama ve arama
     response.py            Chat cevap üretimi
+    enterprise.py          Enterprise overview, audit, ticket ve admin servisleri
     privacy.py             Veri maskeleme yardımcıları
-    analytics.py           Basit olay kaydı ve feedback
+    analytics.py           Olay kaydı, feedback ve metrik özetleri
   static/
-    index.html             Web arayüzü
+    index.html             Enterprise web arayüzü
     styles.css
     app.js
 data/
@@ -104,8 +144,8 @@ curl -X POST http://127.0.0.1:8000/api/admin/reindex
 ## Docker ile Çalıştırma
 
 ```bash
-docker build -t turkce-chatbot .
-docker run --rm -p 8000:8000 turkce-chatbot
+docker build -t kayra-enterprise-assistant .
+docker run --rm -p 8000:8000 kayra-enterprise-assistant
 ```
 
 veya:
@@ -117,16 +157,17 @@ docker compose up --build
 ## Test
 
 ```bash
-pytest
+python -m pytest
 ```
 
 ## Üretime Geçerken
 
-Bu proje bilinçli olarak sade tutuldu. Üretim ortamında aşağıdaki geliştirmeler önerilir:
+Bu prototip üretim mimarisine yakın bir iskelet sunar. Gerçek kurumsal ortam için şu geliştirmeler önerilir:
 
-- RAG için PostgreSQL + pgvector, Qdrant, Weaviate veya Elasticsearch kullanımı
-- Kullanıcı bazlı yetkilendirme ve doküman erişim kontrolü
-- LLM entegrasyonu ve grounded generation prompt'ları
-- Prometheus/Grafana, Sentry ve merkezi loglama
-- Kalıcı feedback paneli ve kalite değerlendirme iş akışı
+- PostgreSQL + pgvector veya Qdrant ile kalıcı vektör arama
+- Azure AD/Okta SSO, JWT ve rol bazlı doküman erişimi
+- OpenAI/Azure OpenAI LLM gateway ve prompt/version yönetimi
+- Microsoft Graph, Jira, ServiceNow, Teams ve Slack adaptörleri
+- Redis/Celery ile e-posta, ticket ve doküman işleme kuyruğu
+- Prometheus/Grafana, Sentry, merkezi loglama ve OpenTelemetry
 - KVKK aydınlatma metni, saklama politikası ve veri silme süreçleri

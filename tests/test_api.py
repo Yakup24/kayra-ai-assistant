@@ -29,5 +29,26 @@ def test_topics_endpoint_returns_corporate_topics():
     response = client.get("/api/topics")
     assert response.status_code == 200
     topics = response.json()["topics"]
-    assert len(topics) >= 5
+    assert len(topics) >= 6
     assert any(topic["id"] == "privacy" for topic in topics)
+
+
+def test_enterprise_overview_endpoint():
+    response = client.get("/api/enterprise/overview")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["product_name"] == "Kayra Enterprise Assistant"
+    assert payload["metrics"]
+    assert payload["integrations"]
+    assert payload["security_controls"]
+
+
+def test_ticket_draft_endpoint_classifies_it_request():
+    response = client.post(
+        "/api/tickets/draft",
+        json={"message": "VPN bağlantısı hata veriyor ve erişim sağlayamıyorum", "priority": "acil"},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["category"] == "IT Destek"
+    assert payload["escalation_required"] is True
