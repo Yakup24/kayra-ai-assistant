@@ -45,6 +45,14 @@ Bu makinede 8000 doluysa:
 python -m uvicorn app.main:app --reload --port 8001
 ```
 
+## Nasıl Kullanılır?
+
+1. Uygulamayı açın: `http://127.0.0.1:8000` veya bu makinede `http://127.0.0.1:8001`
+2. Sol panelden rol seçin: `Genel`, `Çalışan`, `IT`, `İK` veya `Destek`
+3. Operasyon başlıklarından hazır bir konu seçin ya da sohbet kutusuna sorunuzu yazın
+4. Kayra yanıtla birlikte kaynakları, güven skorunu, risk seviyesini ve sonraki aksiyonları gösterir
+5. Sağdaki Control Center üzerinden metrikleri, entegrasyon durumlarını, audit akışını, ticket taslaklarını ve bilgi tabanı eklemeyi kullanın
+
 ## Chat API
 
 ```bash
@@ -159,6 +167,16 @@ docker compose up --build
 ```bash
 python -m pytest
 ```
+
+## Lisans
+
+Bu proje MIT lisansı ile yayınlanır.
+
+- Copyright: `yakup eşki`
+- GitHub: [https://github.com/Yakup24](https://github.com/Yakup24)
+- Email: [yakup.eski2424@icloud.com](mailto:yakup.eski2424@icloud.com)
+
+Detaylar için [LICENSE](LICENSE) ve [LICENSE.html](LICENSE.html) dosyalarına bakın.
 
 ## Üretime Geçerken
 

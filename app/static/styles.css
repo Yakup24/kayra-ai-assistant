@@ -63,7 +63,7 @@ button {
 .nav-panel {
   padding: 16px;
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto minmax(0, 1fr) auto auto;
   gap: 16px;
   overflow: hidden;
 }
@@ -212,6 +212,27 @@ p {
 
 .system-row strong {
   color: var(--ink);
+}
+
+.legal-block {
+  display: grid;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.legal-block strong {
+  color: var(--ink);
+}
+
+.legal-block a {
+  color: var(--accent-deep);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.legal-block a:hover {
+  text-decoration: underline;
 }
 
 .chat-panel {
