@@ -1,4 +1,6 @@
-from fastapi import Depends, FastAPI, Header, HTTPException
+from uuid import uuid4
+
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -41,6 +43,7 @@ from app.services.enterprise import EnterpriseService
 from app.services.online import OnlineSearchService
 from app.services.ops import OpsService
 from app.services.rag import KnowledgeBase
+from app.services.rate_limit import RateLimiter
 from app.services.response import ResponseGenerator
 
 
@@ -56,10 +59,12 @@ auth_service = AuthService(
     settings.admin_password,
     settings.support_username,
     settings.support_password,
+    settings.token_ttl_hours,
 )
 conversation_store = ConversationStore(settings.log_dir / "conversations")
 online_search = OnlineSearchService()
 ops_service = OpsService(settings.log_dir / "ops.sqlite3", settings.knowledge_dir)
+rate_limiter = RateLimiter()
 
 TOPICS = [
     Topic(id="returns", title="İade ve Kargo", category="Müşteri Destek", prompt="İade süreci nasıl işliyor?"),
@@ -73,12 +78,41 @@ TOPICS = [
 app = FastAPI(title=settings.app_name, version="0.3.0")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
+
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    request_id = str(uuid4())
+    response = await call_next(request)
+    response.headers["X-Request-ID"] = request_id
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    response.headers["Content-Security-Policy"] = "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'"
+    return response
+
+
+def rate_limit(request: Request, scope: str, identity: str, limit: int) -> None:
+    host = request.client.host if request.client else "unknown"
+    key = f"{scope}:{host or 'unknown'}:{identity.lower()}"
+    allowed, retry_after = rate_limiter.check(
+        key,
+        limit=limit,
+        window_seconds=settings.rate_limit_window_seconds,
+    )
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Çok fazla istek. {retry_after} saniye sonra tekrar deneyin.",
+            headers={"Retry-After": str(retry_after)},
+        )
 
 
 def current_user(authorization: str = Header(default="")) -> UserProfile:
@@ -125,7 +159,8 @@ def topics() -> TopicsResponse:
 
 
 @app.post("/api/auth/login", response_model=AuthResponse)
-def login(request: LoginRequest) -> AuthResponse:
+def login(request: LoginRequest, http_request: Request) -> AuthResponse:
+    rate_limit(http_request, "login", request.username, settings.login_rate_limit)
     try:
         token, user = auth_service.login(request.username, request.password)
     except ValueError as exc:
@@ -333,7 +368,8 @@ def update_integration(
 
 
 @app.post("/api/chat", response_model=ChatResponse)
-def chat(request: ChatRequest, user: UserProfile = Depends(current_user)) -> ChatResponse:
+def chat(request: ChatRequest, http_request: Request, user: UserProfile = Depends(current_user)) -> ChatResponse:
+    rate_limit(http_request, "chat", user.username, settings.api_rate_limit)
     context = conversation_store.recent_context(request.session_id or user.id)
     enriched_message = request.message
     if context:
@@ -377,7 +413,8 @@ def chat(request: ChatRequest, user: UserProfile = Depends(current_user)) -> Cha
 
 
 @app.post("/api/feedback", response_model=FeedbackResponse)
-def feedback(request: FeedbackRequest, user: UserProfile = Depends(current_user)) -> FeedbackResponse:
+def feedback(request: FeedbackRequest, http_request: Request, user: UserProfile = Depends(current_user)) -> FeedbackResponse:
+    rate_limit(http_request, "feedback", user.username, settings.api_rate_limit)
     payload = request.model_dump()
     payload["username"] = user.username
     analytics.log_feedback(payload)
@@ -444,13 +481,15 @@ def delete_document(filename: str, user: UserProfile = Depends(admin_user)) -> K
 
 
 @app.post("/api/tickets/draft", response_model=TicketDraftResponse)
-def draft_ticket(request: TicketDraftRequest, user: UserProfile = Depends(current_user)) -> TicketDraftResponse:
+def draft_ticket(request: TicketDraftRequest, http_request: Request, user: UserProfile = Depends(current_user)) -> TicketDraftResponse:
+    rate_limit(http_request, "ticket-draft", user.username, settings.ticket_rate_limit)
     requester = request.requester if user.role in {"admin", "support"} and request.requester else user.username
     return enterprise.draft_ticket(request.message, request.priority, requester)
 
 
 @app.post("/api/tickets", response_model=TicketRecord)
-def create_ticket(request: TicketCreateRequest, user: UserProfile = Depends(current_user)) -> TicketRecord:
+def create_ticket(request: TicketCreateRequest, http_request: Request, user: UserProfile = Depends(current_user)) -> TicketRecord:
+    rate_limit(http_request, "ticket-create", user.username, settings.ticket_rate_limit)
     requester = request.requester if user.role in {"admin", "support"} and request.requester else user.username
     draft = enterprise.draft_ticket(request.message, request.priority, requester)
     ticket = ops_service.create_ticket(draft, requester)

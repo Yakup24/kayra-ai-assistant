@@ -26,9 +26,14 @@ Kayra; müşteri destek, IT, İK, uyumluluk, operasyon, ticket taslağı, audit 
 - Audit trail ve operasyon metrikleri
 - Yönetilebilir entegrasyon durum paneli: Graph, Jira/ServiceNow, Qdrant/pgvector, SSO
 - KVKK/GDPR için temel veri maskeleme örnekleri
+- Güvenlik başlıkları: CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy
+- Login, chat ve ticket endpointleri için basit rate limiting
+- CORS izinlerini `ALLOWED_ORIGINS` ile ortam bazlı yönetme
+- Ayarlanabilir token süresi (`TOKEN_TTL_HOURS`)
 - Feedback endpoint'i
 - Docker desteği
 - Pytest testleri
+- GitHub Actions CI
 
 ## Hızlı Başlangıç
 
@@ -81,6 +86,7 @@ Kullanıcı adı: support
 
 Üretimde `.env` ile `AUTH_SECRET`, `ADMIN_USERNAME` ve `ADMIN_PASSWORD` değerlerini değiştirin.
 Destek hesabı için `SUPPORT_USERNAME` ve `SUPPORT_PASSWORD` değerlerini de güncelleyin veya admin panelinden yeni destek uzmanı oluşturun.
+Tarayıcı origin listesi için `ALLOWED_ORIGINS`, token süresi için `TOKEN_TTL_HOURS`, istek sınırları için `LOGIN_RATE_LIMIT`, `API_RATE_LIMIT`, `TICKET_RATE_LIMIT` ve `RATE_LIMIT_WINDOW_SECONDS` kullanılabilir.
 
 Not: Public/self kayıt yoktur. Kurumsal kullanımda çalışan ve destek uzmanı hesapları admin tarafından veritabanına eklenir.
 
@@ -257,6 +263,12 @@ docker compose up --build
 
 ```bash
 python -m pytest
+```
+
+GitHub Actions her `main` push ve pull request için testleri otomatik çalıştırır:
+
+```text
+.github/workflows/ci.yml
 ```
 
 ## Lisans

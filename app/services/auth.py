@@ -31,9 +31,11 @@ class AuthService:
         admin_password: str,
         support_username: str | None = None,
         support_password: str | None = None,
+        token_ttl_hours: int = 12,
     ) -> None:
         self.database_path = database_path
         self.secret = secret.encode("utf-8")
+        self.token_ttl_hours = max(1, token_ttl_hours)
         self.database_path.parent.mkdir(parents=True, exist_ok=True)
         self._init_db()
         self._ensure_admin(admin_username, admin_password)
@@ -117,7 +119,7 @@ class AuthService:
             "sub": profile.id,
             "username": profile.username,
             "role": profile.role,
-            "exp": int((datetime.now(timezone.utc) + timedelta(hours=12)).timestamp()),
+            "exp": int((datetime.now(timezone.utc) + timedelta(hours=self.token_ttl_hours)).timestamp()),
         }
         body = _b64encode(json.dumps(payload, separators=(",", ":"), ensure_ascii=False).encode("utf-8"))
         signature = _b64encode(hmac.new(self.secret, body.encode("ascii"), hashlib.sha256).digest())

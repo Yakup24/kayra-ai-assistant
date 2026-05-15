@@ -3,6 +3,7 @@ from uuid import uuid4
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.services.rate_limit import RateLimiter
 
 
 client = TestClient(app)
@@ -21,6 +22,18 @@ def test_health_endpoint():
     assert response.json()["status"] == "ok"
     assert response.json()["indexed_chunks"] > 0
     assert response.json()["app_name"] == "Kayra"
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert response.headers["x-frame-options"] == "DENY"
+    assert response.headers["x-request-id"]
+
+
+def test_rate_limiter_blocks_after_configured_limit():
+    limiter = RateLimiter()
+    assert limiter.check("login:127.0.0.1:test", limit=2, window_seconds=60) == (True, 0)
+    assert limiter.check("login:127.0.0.1:test", limit=2, window_seconds=60) == (True, 0)
+    allowed, retry_after = limiter.check("login:127.0.0.1:test", limit=2, window_seconds=60)
+    assert allowed is False
+    assert retry_after > 0
 
 
 def test_chat_requires_auth():
