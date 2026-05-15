@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import re
 import sqlite3
@@ -57,6 +57,15 @@ DEFAULT_INTEGRATIONS = [
     },
 ]
 
+SLA_MINUTES_BY_PRIORITY = {
+    "kritik": 240,
+    "urgent": 240,
+    "acil": 480,
+    "high": 480,
+    "normal": 1440,
+    "low": 2880,
+}
+
 
 class OpsService:
     def __init__(self, database_path: Path, knowledge_dir: Path) -> None:
@@ -67,16 +76,20 @@ class OpsService:
         self._seed_integrations()
 
     def create_ticket(self, draft: TicketDraftResponse, requester: str) -> TicketRecord:
-        now = datetime.now(timezone.utc).isoformat()
+        now_dt = datetime.now(timezone.utc)
+        now = now_dt.isoformat()
         ticket_id = f"KAYRA-{uuid4().hex[:8].upper()}"
+        sla_minutes = self._sla_minutes(draft.priority)
+        sla_due_at = (now_dt + timedelta(minutes=sla_minutes)).isoformat()
         with self._connect() as conn:
             conn.execute(
                 """
                 INSERT INTO tickets (
                     id, title, priority, category, summary, status, requester, assignee,
-                    resolution_note, escalation_required, created_at, updated_at
+                    resolution_note, sla_minutes, sla_due_at, resolved_at, resolution_minutes,
+                    resolution_score, escalation_required, created_at, updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     ticket_id,
@@ -86,6 +99,11 @@ class OpsService:
                     draft.summary,
                     "open",
                     requester,
+                    None,
+                    None,
+                    sla_minutes,
+                    sla_due_at,
+                    None,
                     None,
                     None,
                     1 if draft.escalation_required else 0,
@@ -149,19 +167,32 @@ class OpsService:
         resolution_note: str | None = None,
     ) -> TicketRecord:
         current = self.get_ticket(ticket_id)
+        now_dt = datetime.now(timezone.utc)
+        resolved_at = current.resolved_at
+        resolution_minutes = current.resolution_minutes
+        resolution_score = current.resolution_score
+        next_status = status or current.status
+        if next_status == "resolved" and current.status != "resolved":
+            resolved_at = now_dt.isoformat()
+            resolution_minutes = self._elapsed_minutes(current.created_at, resolved_at)
+            resolution_score = self._resolution_score(current.sla_minutes, resolution_minutes)
         updated = {
-            "status": status or current.status,
+            "status": next_status,
             "assignee": assignee if assignee is not None else current.assignee,
             "priority": priority or current.priority,
             "resolution_note": resolution_note if resolution_note is not None else current.resolution_note,
-            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "resolved_at": resolved_at,
+            "resolution_minutes": resolution_minutes,
+            "resolution_score": resolution_score,
+            "updated_at": now_dt.isoformat(),
             "id": ticket_id,
         }
         with self._connect() as conn:
             conn.execute(
                 """
                 UPDATE tickets
-                SET status = ?, assignee = ?, priority = ?, resolution_note = ?, updated_at = ?
+                SET status = ?, assignee = ?, priority = ?, resolution_note = ?, resolved_at = ?,
+                    resolution_minutes = ?, resolution_score = ?, updated_at = ?
                 WHERE id = ?
                 """,
                 (
@@ -169,6 +200,9 @@ class OpsService:
                     updated["assignee"],
                     updated["priority"],
                     updated["resolution_note"],
+                    updated["resolved_at"],
+                    updated["resolution_minutes"],
+                    updated["resolution_score"],
                     updated["updated_at"],
                     updated["id"],
                 ),
@@ -254,6 +288,11 @@ class OpsService:
                     requester TEXT NOT NULL,
                     assignee TEXT,
                     resolution_note TEXT,
+                    sla_minutes INTEGER,
+                    sla_due_at TEXT,
+                    resolved_at TEXT,
+                    resolution_minutes INTEGER,
+                    resolution_score INTEGER,
                     escalation_required INTEGER NOT NULL,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
@@ -261,6 +300,11 @@ class OpsService:
                 """
             )
             self._ensure_column(conn, "tickets", "resolution_note", "TEXT")
+            self._ensure_column(conn, "tickets", "sla_minutes", "INTEGER")
+            self._ensure_column(conn, "tickets", "sla_due_at", "TEXT")
+            self._ensure_column(conn, "tickets", "resolved_at", "TEXT")
+            self._ensure_column(conn, "tickets", "resolution_minutes", "INTEGER")
+            self._ensure_column(conn, "tickets", "resolution_score", "INTEGER")
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS integrations (
@@ -310,6 +354,15 @@ class OpsService:
             conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
     def _ticket(self, row: dict) -> TicketRecord:
+        sla_minutes = int(row.get("sla_minutes") or self._sla_minutes(row["priority"]))
+        sla_due_at = row.get("sla_due_at") or self._due_at(row["created_at"], sla_minutes)
+        resolved_at = row.get("resolved_at")
+        resolution_minutes = row.get("resolution_minutes")
+        if resolution_minutes is None and resolved_at:
+            resolution_minutes = self._elapsed_minutes(row["created_at"], resolved_at)
+        resolution_score = row.get("resolution_score")
+        if resolution_score is None and resolution_minutes is not None:
+            resolution_score = self._resolution_score(sla_minutes, int(resolution_minutes))
         return TicketRecord(
             id=row["id"],
             title=row["title"],
@@ -320,10 +373,40 @@ class OpsService:
             requester=row["requester"],
             assignee=row.get("assignee"),
             resolution_note=row.get("resolution_note"),
+            sla_minutes=sla_minutes,
+            sla_due_at=sla_due_at,
+            sla_status=self._sla_status(row["status"], sla_due_at),
+            resolved_at=resolved_at,
+            resolution_minutes=resolution_minutes,
+            resolution_score=resolution_score,
             escalation_required=bool(row["escalation_required"]),
             created_at=row["created_at"],
             updated_at=row["updated_at"],
         )
+
+    def _sla_minutes(self, priority: str) -> int:
+        return SLA_MINUTES_BY_PRIORITY.get(priority.strip().lower(), SLA_MINUTES_BY_PRIORITY["normal"])
+
+    def _due_at(self, created_at: str, sla_minutes: int) -> str:
+        return (datetime.fromisoformat(created_at) + timedelta(minutes=sla_minutes)).isoformat()
+
+    def _elapsed_minutes(self, start_at: str, end_at: str) -> int:
+        start = datetime.fromisoformat(start_at)
+        end = datetime.fromisoformat(end_at)
+        return max(0, int((end - start).total_seconds() // 60))
+
+    def _resolution_score(self, sla_minutes: int, resolution_minutes: int) -> int:
+        if resolution_minutes <= sla_minutes:
+            ratio = resolution_minutes / max(sla_minutes, 1)
+            return max(85, min(100, 100 - int(ratio * 10)))
+        overdue_ratio = (resolution_minutes - sla_minutes) / max(sla_minutes, 1)
+        return max(40, 80 - int(overdue_ratio * 35))
+
+    def _sla_status(self, status: str, sla_due_at: str) -> str:
+        if status == "resolved":
+            return "met"
+        due_at = datetime.fromisoformat(sla_due_at)
+        return "breached" if datetime.now(timezone.utc) > due_at else "active"
 
     def _integration(self, row: dict) -> IntegrationConfig:
         return IntegrationConfig(

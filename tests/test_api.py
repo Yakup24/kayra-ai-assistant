@@ -43,6 +43,19 @@ def test_chat_endpoint_returns_sources():
     assert payload["next_actions"]
 
 
+def test_chat_turns_source_into_step_by_step_resolution():
+    response = client.post(
+        "/api/chat",
+        json={"message": "VPN nasil kurulur adim adim anlat"},
+        headers=auth_headers(),
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert "uygulanabilir ad" in payload["answer"]
+    assert "1." in payload["answer"]
+    assert any(action["label"] == "Adım adım çöz" for action in payload["next_actions"])
+
+
 def test_topics_endpoint_returns_corporate_topics():
     response = client.get("/api/topics")
     assert response.status_code == 200
@@ -84,6 +97,9 @@ def test_ticket_lifecycle_persists_to_database():
     ticket = create.json()
     assert ticket["id"].startswith("KAYRA-")
     assert ticket["status"] == "open"
+    assert ticket["sla_minutes"] == 480
+    assert ticket["sla_status"] == "active"
+    assert ticket["sla_due_at"]
 
     update = client.patch(
         f"/api/admin/tickets/{ticket['id']}",
@@ -92,6 +108,8 @@ def test_ticket_lifecycle_persists_to_database():
     )
     assert update.status_code == 200
     assert update.json()["status"] == "resolved"
+    assert update.json()["resolution_score"] is not None
+    assert update.json()["sla_status"] == "met"
 
     tickets = client.get("/api/admin/tickets", headers=headers)
     assert tickets.status_code == 200
@@ -169,6 +187,8 @@ def test_support_specialist_can_only_manage_ticket_queue():
     assert resolved.status_code == 200
     assert resolved.json()["status"] == "resolved"
     assert "Teslimat kaydı" in resolved.json()["resolution_note"]
+    assert resolved.json()["resolution_minutes"] is not None
+    assert resolved.json()["resolution_score"] >= 85
 
     blocked = client.get("/api/admin/users", headers=support_headers)
     assert blocked.status_code == 403

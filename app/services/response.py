@@ -38,6 +38,20 @@ DOMAIN_LABELS = {
 
 GREETINGS = {"merhaba", "selam", "slm", "iyi gunler", "iyi günler", "gunaydin", "günaydın", "iyi aksamlar", "iyi akşamlar"}
 HANDOFF_TERMS = {"temsilci", "insan", "musteri hizmetleri", "müşteri hizmetleri", "canli destek", "canlı destek", "yetkili"}
+PROCEDURAL_TERMS = {
+    "nasil",
+    "nasıl",
+    "kurulur",
+    "yapilir",
+    "yapılır",
+    "adim",
+    "adım",
+    "cozum",
+    "çözüm",
+    "hata",
+    "kontrol",
+    "talimat",
+}
 
 
 @dataclass(frozen=True)
@@ -223,6 +237,9 @@ class ResponseGenerator:
         return round(max(0.0, score), 2)
 
     def _compose_answer(self, message: str, results: list[SearchResult], domain: str, risk_level: str, role: str) -> str:
+        if self._wants_steps(message):
+            return self._compose_step_answer(message, results, domain, risk_level, role)
+
         selected_sentences = self._select_sentences(message, results)
         if not selected_sentences:
             selected_sentences = [self._excerpt(results[0].chunk.text, limit=320)]
@@ -238,6 +255,56 @@ class ResponseGenerator:
         else:
             lines.append("Gerekirse ilgili ekip veya canlı temsilci ile doğrulama yapılabilir.")
         return "\n".join(lines)
+
+    def _compose_step_answer(self, message: str, results: list[SearchResult], domain: str, risk_level: str, role: str) -> str:
+        selected_sentences = self._select_sentences(message, results)
+        source_notes = selected_sentences[:3] or [self._excerpt(results[0].chunk.text, limit=280)]
+        steps = self._procedural_steps(message, domain)
+
+        lines = [f"{DOMAIN_LABELS.get(domain, DOMAIN_LABELS['general'])} kaynağını uygulanabilir adımlara çevirdim:"]
+        for index, step in enumerate(steps, start=1):
+            lines.append(f"{index}. {step}")
+        lines.append("Kaynakta dayanak olan notlar:")
+        for note in source_notes:
+            lines.append(f"- {note}")
+        role_note = self._role_note(role, domain)
+        if role_note:
+            lines.append(role_note)
+        if risk_level == "yüksek":
+            lines.append("Bu akış yüksek riskli olabilir; işlem öncesi yetkili uzman onayı alın.")
+        lines.append("Sorun bu adımlarla çözülmezse ticket açıp hata mesajı, cihaz/hesap bilgisi ve denenen adımları ekleyin.")
+        return "\n".join(lines)
+
+    def _procedural_steps(self, message: str, domain: str) -> list[str]:
+        normalized = self._match_text(message)
+        if domain == "it_support" and "vpn" in normalized:
+            return [
+                "Kurumsal internet bağlantısını ve cihazın saat/tarih bilgisini kontrol edin.",
+                "VPN uygulaması yüklü değilse kurum portalından onaylı istemciyi kurun; eski veya bilinmeyen istemci kullanmayın.",
+                "Kurum e-posta hesabıyla oturum açın ve MFA/doğrulama bildirimini onaylayın.",
+                "Bağlantı hata verirse uygulamayı kapatıp yeniden açın, sonra hata mesajını ekrana göründüğü gibi kaydedin.",
+                "Hata devam ederse destek talebi açın; cihaz adı, işletim sistemi, lokasyon ve hata mesajını ekleyin.",
+            ]
+        if domain == "it_support":
+            return [
+                "Çalışandan şifre veya tek kullanımlık kod istemeden sorunun kapsamını doğrulayın.",
+                "Cihaz, tarayıcı/uygulama, hata mesajı ve etkilenen hesabı kaydedin.",
+                "Bilgi tabanındaki ilgili prosedürü uygulayın ve her adımın sonucunu not edin.",
+                "Sorun devam ederse ticketı destek uzmanına atayıp önceliği güncelleyin.",
+            ]
+        if domain == "hr":
+            return [
+                "Çalışanın talep tipini ve gerekli tarih/bağlam bilgisini netleştirin.",
+                "İlgili portal veya politika adımını kaynak dokümana göre uygulayın.",
+                "Yönetici onayı, belge veya ek bilgi gerekiyorsa çalışana açıkça bildirin.",
+                "Konu kişisel veri içeriyorsa sadece yetkili kanal üzerinden ilerleyin.",
+            ]
+        return [
+            "Sorunun başlığını, etkilenen kişiyi ve beklenen sonucu netleştirin.",
+            "Bilgi tabanındaki kaynak notlarını sırayla uygulayın.",
+            "Her adım sonunda sonucun değişip değişmediğini kontrol edin.",
+            "Çözüm olmazsa ticket açıp denenen adımları ve gözlenen hatayı ekleyin.",
+        ]
 
     def _role_note(self, role: str, domain: str) -> str:
         normalized_role = self._match_text(role)
@@ -277,7 +344,7 @@ class ResponseGenerator:
     def _next_actions(self, message: str, domain: str, confidence: float, risk_level: str) -> list[NextAction]:
         if domain == "it_support":
             return [
-                NextAction(label="Hata adımları", prompt="VPN hatası için adım adım kontrol listesi ver."),
+                NextAction(label="Adım adım çöz", prompt=f"{message} için kaynağı adım adım uygulanacak çözüm planına çevir."),
                 NextAction(label="Talep metni", prompt="IT destek kaydı için kısa talep metni hazırla."),
                 NextAction(label="Canlı destek", prompt="Canlı temsilciye aktar."),
             ]
@@ -304,7 +371,7 @@ class ResponseGenerator:
                 NextAction(label="Kaynak ekle", prompt="Bu konu için bilgi tabanına hangi doküman eklenmeli?"),
             ]
         return [
-            NextAction(label="Detaylandır", prompt=f"{message} konusunu daha detaylı açıkla."),
+            NextAction(label="Adım adım çöz", prompt=f"{message} için kaynağı adım adım uygulanacak çözüm planına çevir."),
             NextAction(label="Kaynaklar", prompt="Bu yanıtın kaynaklarını göster."),
             NextAction(label="Canlı destek", prompt="Canlı temsilciye aktar."),
         ]
@@ -317,3 +384,7 @@ class ResponseGenerator:
 
     def _match_text(self, text: str) -> str:
         return text.replace("İ", "i").replace("I", "ı").lower().translate(TURKISH_ASCII_MAP)
+
+    def _wants_steps(self, message: str) -> bool:
+        normalized = self._match_text(message)
+        return any(self._match_text(term) in normalized for term in PROCEDURAL_TERMS)

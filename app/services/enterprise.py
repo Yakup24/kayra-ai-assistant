@@ -36,6 +36,11 @@ CAPABILITIES = [
         status="Prototip",
     ),
     Capability(
+        title="SLA ve çözüm puanı",
+        description="Ticket önceliğine göre hedef süre belirler; çözülünce süre ve 100 üzerinden kapanış puanı hesaplar.",
+        status="Aktif",
+    ),
+    Capability(
         title="RBAC uyumlu rol bağlamı",
         description="Admin, destek uzmanı ve çalışan rollerini ayrı yetki alanlarıyla yönetir.",
         status="Aktif",

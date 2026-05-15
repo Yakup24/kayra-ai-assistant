@@ -869,6 +869,39 @@ select:focus {
   line-height: 1.35;
 }
 
+.ticket-info .ticket-sla {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  margin-top: 6px;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  padding: 4px 8px;
+  background: white;
+  color: var(--muted);
+  line-height: 1.2;
+}
+
+.ticket-info .ticket-sla.breached {
+  border-color: #f4b4aa;
+  color: var(--red);
+  background: #fff6f5;
+}
+
+.ticket-info .ticket-sla.met {
+  border-color: #b7d8d2;
+  color: var(--accent-deep);
+  background: #ecf8f6;
+}
+
+.ticket-info .resolution-score {
+  display: inline-flex;
+  width: fit-content;
+  margin-top: 6px;
+  color: var(--blue);
+  font-size: 0.8rem;
+}
+
 .user-actions,
 .inline-actions {
   display: flex;

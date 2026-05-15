@@ -64,6 +64,12 @@ const ticketStatusLabels = {
   closed: "Kapalı",
 };
 
+const slaStatusLabels = {
+  active: "SLA aktif",
+  breached: "SLA aşıldı",
+  met: "SLA içinde",
+};
+
 let authMode = "login";
 let authToken = localStorage.getItem("kayra_token") || "";
 let currentUser = null;
@@ -95,6 +101,24 @@ function createElement(tag, className, text) {
   if (className) element.className = className;
   if (text !== undefined) element.textContent = text;
   return element;
+}
+
+function formatDateTime(value) {
+  if (!value) return "-";
+  return new Intl.DateTimeFormat("tr-TR", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
+}
+
+function formatDuration(minutes) {
+  if (minutes === null || minutes === undefined) return "-";
+  if (minutes < 60) return `${minutes} dk`;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return rest ? `${hours} sa ${rest} dk` : `${hours} sa`;
 }
 
 function setAuthMode(mode) {
@@ -644,6 +668,19 @@ async function loadTickets() {
     info.appendChild(createElement("strong", null, `${ticket.id} · ${ticket.title}`));
     info.appendChild(createElement("span", null, `${ticket.category} · ${ticket.priority} · ${ticketStatusLabels[ticket.status] || ticket.status} · Çalışan: ${ticket.requester}`));
     info.appendChild(createElement("span", "ticket-meta", `Atanan: ${ticket.assignee || "Henüz yok"}`));
+    info.appendChild(
+      createElement(
+        "span",
+        `ticket-sla ${ticket.sla_status}`,
+        `${slaStatusLabels[ticket.sla_status] || ticket.sla_status} · Hedef: ${formatDateTime(ticket.sla_due_at)} · Süre: ${formatDuration(ticket.sla_minutes)}`
+      )
+    );
+    if (ticket.resolution_minutes !== null && ticket.resolution_minutes !== undefined) {
+      info.appendChild(createElement("span", "ticket-meta", `Çözülme süresi: ${formatDuration(ticket.resolution_minutes)}`));
+    }
+    if (ticket.resolution_score !== null && ticket.resolution_score !== undefined) {
+      info.appendChild(createElement("strong", "resolution-score", `Çözüm puanı: ${ticket.resolution_score}/100`));
+    }
     if (ticket.resolution_note) {
       info.appendChild(createElement("em", "resolution-note", `Çözüm: ${ticket.resolution_note}`));
     }
@@ -713,9 +750,12 @@ async function updateTicketStatus(ticketId, status, button = null) {
       createElement(
         "p",
         null,
-        `${ticketStatusLabels[updated.status] || updated.status} · Atanan: ${updated.assignee || "Henüz yok"}`
+        `${ticketStatusLabels[updated.status] || updated.status} · Atanan: ${updated.assignee || "Henüz yok"} · SLA: ${slaStatusLabels[updated.sla_status] || updated.sla_status}`
       )
     );
+    if (updated.resolution_score !== null && updated.resolution_score !== undefined) {
+      ticketOutput.appendChild(createElement("span", "mini-line", `Çözüm puanı: ${updated.resolution_score}/100 · Süre: ${formatDuration(updated.resolution_minutes)}`));
+    }
     if (updated.resolution_note) {
       ticketOutput.appendChild(createElement("span", "mini-line", `Çözüm: ${updated.resolution_note}`));
     }
@@ -753,7 +793,8 @@ async function createTicketDraft(event) {
   }
   ticketOutput.replaceChildren();
   ticketOutput.appendChild(createElement("strong", null, `${ticket.id} açıldı`));
-  ticketOutput.appendChild(createElement("p", null, `${ticket.category} · ${ticket.priority} · ${ticket.status}`));
+  ticketOutput.appendChild(createElement("p", null, `${ticket.category} · ${ticket.priority} · ${ticketStatusLabels[ticket.status] || ticket.status}`));
+  ticketOutput.appendChild(createElement("span", "mini-line", `SLA hedefi: ${formatDateTime(ticket.sla_due_at)} · Süre: ${formatDuration(ticket.sla_minutes)}`));
   ticketOutput.appendChild(createElement("span", "mini-line", ticket.summary));
   ticketMessage.value = "";
   ticketRequester.value = canManageTickets() ? ticketRequester.value : "";

@@ -17,8 +17,10 @@ Kayra; müşteri destek, IT, İK, uyumluluk, operasyon, ticket taslağı, audit 
 - Destek uzmanı paneli: açık ticket kuyruğu, işleme alma ve çözüm notuyla kapatma
 - Çalışan paneli: sorun/talep açma ve kendi ticket kayıtlarını takip etme
 - Alan, güven skoru, risk seviyesi ve sonraki aksiyon üretimi
+- Kaynak metnini çalışan için adım adım çözüm talimatına dönüştürme
 - Ticket taslağı üretimi
 - SQLite tabanlı kalıcı ticket kayıtları ve durum güncelleme
+- Önceliğe göre SLA hedef süresi, çözülme süresi ve kapanışta 100 üzerinden çözüm puanı
 - Admin doküman ekleme ve yeniden indeksleme
 - Bilgi tabanı doküman kataloğu
 - Audit trail ve operasyon metrikleri
@@ -60,7 +62,8 @@ python -m uvicorn app.main:app --reload --port 8001
 5. Sol panelden rol seçin: `Genel`, `Çalışan`, `IT`, `İK` veya `Destek`
 6. `Online bilgi ara` seçeneğini açarsanız Kayra web kaynaklarından kısa ek bağlam çekmeyi dener
 7. Destek uzmanı girişiyle çalışan talepleri kuyruğu, işleme alma ve çözüm notuyla kapatma ekranı açılır
-8. Admin girişiyle Control Center, audit, hesap, entegrasyon, ticket ve bilgi tabanı yönetimi açılır
+8. Ticket kapanınca çözüm süresi ve SLA puanı otomatik hesaplanır
+9. Admin girişiyle Control Center, audit, hesap, entegrasyon, ticket ve bilgi tabanı yönetimi açılır
 
 Varsayılan geliştirme admin hesabı:
 
@@ -96,6 +99,15 @@ curl -X POST http://127.0.0.1:8000/api/chat ^
   -H "Content-Type: application/json" ^
   -H "Authorization: Bearer TOKEN" ^
   -d "{\"message\":\"İade süreci nasıl işliyor?\",\"user_role\":\"support\",\"online_enabled\":false}"
+```
+
+Kayra kaynakları adım adım çözüm talimatına da dönüştürür:
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/chat ^
+  -H "Content-Type: application/json" ^
+  -H "Authorization: Bearer TOKEN" ^
+  -d "{\"message\":\"VPN nasıl kurulur adım adım anlat\",\"user_role\":\"employee\"}"
 ```
 
 Örnek yanıt:
@@ -176,6 +188,8 @@ curl -X PATCH http://127.0.0.1:8000/api/support/tickets/KAYRA-1234ABCD ^
   -H "Authorization: Bearer TOKEN" ^
   -d "{\"status\":\"resolved\",\"resolution_note\":\"Sorun incelendi ve çözüm adımları çalışana iletildi.\"}"
 ```
+
+Ticket yanıtında `sla_minutes`, `sla_due_at`, `sla_status`, `resolution_minutes` ve `resolution_score` alanları döner.
 
 Çalışanın kendi talepleri:
 

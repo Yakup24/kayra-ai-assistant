@@ -173,6 +173,12 @@ class TicketRecord(BaseModel):
     requester: str
     assignee: Optional[str] = None
     resolution_note: Optional[str] = None
+    sla_minutes: int
+    sla_due_at: str
+    sla_status: str
+    resolved_at: Optional[str] = None
+    resolution_minutes: Optional[int] = None
+    resolution_score: Optional[int] = None
     escalation_required: bool
     created_at: str
     updated_at: str
