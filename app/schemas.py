@@ -172,6 +172,7 @@ class TicketRecord(BaseModel):
     status: str
     requester: str
     assignee: Optional[str] = None
+    resolution_note: Optional[str] = None
     escalation_required: bool
     created_at: str
     updated_at: str
@@ -185,6 +186,7 @@ class TicketUpdateRequest(BaseModel):
     status: Optional[str] = Field(default=None, max_length=30)
     assignee: Optional[str] = Field(default=None, max_length=120)
     priority: Optional[str] = Field(default=None, max_length=30)
+    resolution_note: Optional[str] = Field(default=None, max_length=1000)
 
 
 class LoginRequest(BaseModel):

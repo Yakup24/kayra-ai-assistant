@@ -240,6 +240,7 @@ def update_ticket(ticket_id: str, request: TicketUpdateRequest, admin: UserProfi
             status=request.status,
             assignee=request.assignee,
             priority=request.priority,
+            resolution_note=request.resolution_note,
         )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -275,6 +276,7 @@ def update_support_ticket(ticket_id: str, request: TicketUpdateRequest, user: Us
             status=request.status,
             assignee=assignee,
             priority=request.priority,
+            resolution_note=request.resolution_note,
         )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc

@@ -161,11 +161,20 @@ def test_support_specialist_can_only_manage_ticket_queue():
     assert update.status_code == 200
     assert update.json()["assignee"] == support_username
 
+    resolved = client.patch(
+        f"/api/support/tickets/{ticket['id']}",
+        json={"status": "resolved", "resolution_note": "Teslimat kaydı kontrol edildi ve destek ekibi bilgilendirildi."},
+        headers=support_headers,
+    )
+    assert resolved.status_code == 200
+    assert resolved.json()["status"] == "resolved"
+    assert "Teslimat kaydı" in resolved.json()["resolution_note"]
+
     blocked = client.get("/api/admin/users", headers=support_headers)
     assert blocked.status_code == 403
 
 
-def test_user_can_see_only_own_tickets():
+def test_employee_can_see_only_own_tickets():
     username = f"employee_{uuid4().hex[:8]}"
     create_user = client.post(
         "/api/admin/users",

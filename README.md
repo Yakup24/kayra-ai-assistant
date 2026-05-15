@@ -12,10 +12,10 @@ Kayra; müşteri destek, IT, İK, uyumluluk, operasyon, ticket taslağı, audit 
 - Kaynak gösterimli cevaplar
 - Enterprise control center arayüzü
 - Rol seçimi: genel, çalışan, IT, İK ve destek
-- SQLite tabanlı admin kontrollü kullanıcı veritabanı
-- Ayrı giriş akışları: kullanıcı, destek uzmanı ve admin
-- Destek uzmanı paneli: yalnızca açık ticket kuyruğu ve durum güncelleme
-- Kullanıcı paneli: yeni talep açma ve kendi ticket kayıtlarını takip etme
+- SQLite tabanlı admin kontrollü çalışan ve destek hesabı veritabanı
+- Ayrı giriş akışları: çalışan, destek uzmanı ve admin
+- Destek uzmanı paneli: açık ticket kuyruğu, işleme alma ve çözüm notuyla kapatma
+- Çalışan paneli: sorun/talep açma ve kendi ticket kayıtlarını takip etme
 - Alan, güven skoru, risk seviyesi ve sonraki aksiyon üretimi
 - Ticket taslağı üretimi
 - SQLite tabanlı kalıcı ticket kayıtları ve durum güncelleme
@@ -55,12 +55,12 @@ python -m uvicorn app.main:app --reload --port 8001
 
 1. Uygulamayı açın: `http://127.0.0.1:8000` veya bu makinede `http://127.0.0.1:8001`
 2. Admin hesabıyla giriş yapın
-3. Admin panelindeki `Kullanıcı Yönetimi` bölümünden çalışan hesabı oluşturun
-4. Çalışan, admin tarafından verilen kullanıcı adı/şifre ile giriş yapar
+3. Admin panelindeki `Hesap Yönetimi` bölümünden çalışan hesabı oluşturun
+4. Çalışan, admin tarafından verilen kullanıcı adı/şifre ile `Çalışan` sekmesinden giriş yapar
 5. Sol panelden rol seçin: `Genel`, `Çalışan`, `IT`, `İK` veya `Destek`
 6. `Online bilgi ara` seçeneğini açarsanız Kayra web kaynaklarından kısa ek bağlam çekmeyi dener
-7. Destek uzmanı girişiyle yalnızca ticket kuyruğu ve durum yönetimi açılır
-8. Admin girişiyle Control Center, audit, kullanıcı, entegrasyon, ticket ve bilgi tabanı yönetimi açılır
+7. Destek uzmanı girişiyle çalışan talepleri kuyruğu, işleme alma ve çözüm notuyla kapatma ekranı açılır
+8. Admin girişiyle Control Center, audit, hesap, entegrasyon, ticket ve bilgi tabanı yönetimi açılır
 
 Varsayılan geliştirme admin hesabı:
 
@@ -79,7 +79,7 @@ Kullanıcı adı: support
 Üretimde `.env` ile `AUTH_SECRET`, `ADMIN_USERNAME` ve `ADMIN_PASSWORD` değerlerini değiştirin.
 Destek hesabı için `SUPPORT_USERNAME` ve `SUPPORT_PASSWORD` değerlerini de güncelleyin veya admin panelinden yeni destek uzmanı oluşturun.
 
-Not: Public/self kayıt yoktur. Kurumsal kullanımda kullanıcılar admin tarafından veritabanına eklenir.
+Not: Public/self kayıt yoktur. Kurumsal kullanımda çalışan ve destek uzmanı hesapları admin tarafından veritabanına eklenir.
 
 ## Chat API
 
@@ -166,13 +166,18 @@ curl http://127.0.0.1:8000/api/admin/integrations -H "Authorization: Bearer TOKE
 curl http://127.0.0.1:8000/api/admin/documents -H "Authorization: Bearer TOKEN"
 ```
 
-Destek uzmanı ticket kuyruğu:
+Destek uzmanı ticket kuyruğu ve çözüm akışı:
 
 ```bash
 curl http://127.0.0.1:8000/api/support/tickets -H "Authorization: Bearer TOKEN"
+
+curl -X PATCH http://127.0.0.1:8000/api/support/tickets/KAYRA-1234ABCD ^
+  -H "Content-Type: application/json" ^
+  -H "Authorization: Bearer TOKEN" ^
+  -d "{\"status\":\"resolved\",\"resolution_note\":\"Sorun incelendi ve çözüm adımları çalışana iletildi.\"}"
 ```
 
-Kullanıcının kendi talepleri:
+Çalışanın kendi talepleri:
 
 ```bash
 curl http://127.0.0.1:8000/api/tickets/me -H "Authorization: Bearer TOKEN"
@@ -198,7 +203,7 @@ app/
     rag.py                 Doküman yükleme, parçalama ve arama
     response.py            Chat cevap üretimi
     enterprise.py          Enterprise overview, audit, ticket ve admin servisleri
-    auth.py                SQLite kullanıcı veritabanı, parola hash ve token yönetimi
+    auth.py                SQLite hesap veritabanı, parola hash ve token yönetimi
     ops.py                 Ticket, entegrasyon ve doküman kataloğu servisleri
     conversation.py        Kayıtlı sohbet geçmişi
     online.py              Anahtarsız online bilgi arama adaptörü

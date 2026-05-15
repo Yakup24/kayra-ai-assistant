@@ -74,9 +74,9 @@ class OpsService:
                 """
                 INSERT INTO tickets (
                     id, title, priority, category, summary, status, requester, assignee,
-                    escalation_required, created_at, updated_at
+                    resolution_note, escalation_required, created_at, updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     ticket_id,
@@ -86,6 +86,7 @@ class OpsService:
                     draft.summary,
                     "open",
                     requester,
+                    None,
                     None,
                     1 if draft.escalation_required else 0,
                     now,
@@ -145,12 +146,14 @@ class OpsService:
         status: str | None = None,
         assignee: str | None = None,
         priority: str | None = None,
+        resolution_note: str | None = None,
     ) -> TicketRecord:
         current = self.get_ticket(ticket_id)
         updated = {
             "status": status or current.status,
             "assignee": assignee if assignee is not None else current.assignee,
             "priority": priority or current.priority,
+            "resolution_note": resolution_note if resolution_note is not None else current.resolution_note,
             "updated_at": datetime.now(timezone.utc).isoformat(),
             "id": ticket_id,
         }
@@ -158,10 +161,17 @@ class OpsService:
             conn.execute(
                 """
                 UPDATE tickets
-                SET status = ?, assignee = ?, priority = ?, updated_at = ?
+                SET status = ?, assignee = ?, priority = ?, resolution_note = ?, updated_at = ?
                 WHERE id = ?
                 """,
-                (updated["status"], updated["assignee"], updated["priority"], updated["updated_at"], updated["id"]),
+                (
+                    updated["status"],
+                    updated["assignee"],
+                    updated["priority"],
+                    updated["resolution_note"],
+                    updated["updated_at"],
+                    updated["id"],
+                ),
             )
         return self.get_ticket(ticket_id)
 
@@ -243,12 +253,14 @@ class OpsService:
                     status TEXT NOT NULL,
                     requester TEXT NOT NULL,
                     assignee TEXT,
+                    resolution_note TEXT,
                     escalation_required INTEGER NOT NULL,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                 )
                 """
             )
+            self._ensure_column(conn, "tickets", "resolution_note", "TEXT")
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS integrations (
@@ -292,6 +304,11 @@ class OpsService:
         conn.row_factory = sqlite3.Row
         return conn
 
+    def _ensure_column(self, conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:
+        columns = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+        if column not in columns:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+
     def _ticket(self, row: dict) -> TicketRecord:
         return TicketRecord(
             id=row["id"],
@@ -302,6 +319,7 @@ class OpsService:
             status=row["status"],
             requester=row["requester"],
             assignee=row.get("assignee"),
+            resolution_note=row.get("resolution_note"),
             escalation_required=bool(row["escalation_required"]),
             created_at=row["created_at"],
             updated_at=row["updated_at"],

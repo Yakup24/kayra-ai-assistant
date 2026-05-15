@@ -32,7 +32,7 @@ CAPABILITIES = [
     ),
     Capability(
         title="Ticket ve e-posta taslakları",
-        description="Kullanıcı mesajından kategori, öncelik, özet ve kabul kriteri çıkarır.",
+        description="Çalışan mesajından kategori, öncelik, özet ve kabul kriteri çıkarır.",
         status="Prototip",
     ),
     Capability(
@@ -88,7 +88,7 @@ SECURITY_CONTROLS = [
     SecurityControl(
         title="Least privilege tasarımı",
         level="Plan",
-        description="SSO sonrası kullanıcı rolüne göre doküman ve aksiyon yetkisi uygulanacak.",
+        description="SSO sonrası çalışan rolüne göre doküman ve aksiyon yetkisi uygulanacak.",
     ),
 ]
 
@@ -112,7 +112,7 @@ class EnterpriseService:
             PlatformMetric(label="Toplam sohbet", value=str(summary["total_chats"]), trend="Son kayıtlar"),
             PlatformMetric(label="Ortalama güven", value=f"%{int(summary['avg_confidence'] * 100)}", trend="Yanıt kalitesi"),
             PlatformMetric(label="Aktarım önerisi", value=str(summary["handoffs"]), trend="Operasyon yükü"),
-            PlatformMetric(label="Feedback ort.", value=str(summary["avg_rating"] or "-"), trend="Kullanıcı puanı"),
+            PlatformMetric(label="Feedback ort.", value=str(summary["avg_rating"] or "-"), trend="Çalışan puanı"),
         ]
         return EnterpriseOverviewResponse(
             product_name="Kayra Enterprise Assistant",

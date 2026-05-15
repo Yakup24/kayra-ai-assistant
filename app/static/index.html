@@ -18,13 +18,13 @@
         </div>
 
         <div class="auth-tabs" role="group" aria-label="Giriş tipi">
-          <button class="auth-tab active" type="button" data-auth-mode="login">Kullanıcı</button>
+          <button class="auth-tab active" type="button" data-auth-mode="login">Çalışan</button>
           <button class="auth-tab" type="button" data-auth-mode="support">Destek Uzmanı</button>
           <button class="auth-tab" type="button" data-auth-mode="admin">Admin</button>
         </div>
 
         <form id="auth-form" class="auth-form">
-          <input id="auth-username" type="text" placeholder="Kullanıcı adı" autocomplete="username" required />
+          <input id="auth-username" type="text" placeholder="Hesap kullanıcı adı" autocomplete="username" required />
           <input id="auth-password" type="password" placeholder="Şifre" autocomplete="current-password" required />
           <button id="auth-submit" type="submit">Giriş Yap</button>
         </form>
@@ -65,7 +65,7 @@
             <button class="role-button" type="button" data-role="employee">Çalışan</button>
             <button class="role-button" type="button" data-role="it">IT</button>
             <button class="role-button" type="button" data-role="hr">İK</button>
-            <button class="role-button" type="button" data-role="support">Destek</button>
+            <button class="role-button" type="button" data-role="support">Destek Uzmanı</button>
             <button class="role-button" type="button" data-role="admin">Admin</button>
           </div>
         </section>
@@ -133,7 +133,7 @@
             <h2 id="product-name">Kayra Enterprise</h2>
             <p id="product-tagline">Platform hazırlanıyor.</p>
           </div>
-          <strong id="product-maturity" class="maturity">v0.2</strong>
+          <strong id="product-maturity" class="maturity">v0.3</strong>
         </section>
 
         <section class="control-section admin-only">
@@ -161,20 +161,20 @@
         </section>
 
         <section class="control-section tool-section admin-only">
-          <h3>Kullanıcı Yönetimi</h3>
+          <h3>Hesap Yönetimi</h3>
           <form id="user-form" class="tool-form">
             <input id="new-user-display" type="text" placeholder="Ad Soyad" />
             <input id="new-user-email" type="email" placeholder="E-posta" />
-            <input id="new-user-username" type="text" placeholder="Kullanıcı adı" />
+            <input id="new-user-username" type="text" placeholder="Hesap kullanıcı adı" />
             <input id="new-user-password" type="password" placeholder="Geçici şifre" />
             <select id="new-user-role" aria-label="Rol">
               <option value="employee">Çalışan</option>
               <option value="it">IT</option>
               <option value="hr">İK</option>
-              <option value="support">Destek</option>
+              <option value="support">Destek Uzmanı</option>
               <option value="admin">Admin</option>
             </select>
-            <button type="submit">Kullanıcı Oluştur</button>
+            <button type="submit">Hesap Oluştur</button>
           </form>
           <div id="user-output" class="tool-output"></div>
           <div id="user-list" class="user-list"></div>
@@ -185,16 +185,16 @@
             <h3 id="ticket-panel-title">Talep Merkezi</h3>
             <span id="ticket-panel-mode" class="status-pill">Hazır</span>
           </div>
-          <p id="ticket-panel-copy" class="panel-copy">Kurumsal destek taleplerini buradan açıp takip edebilirsiniz.</p>
+          <p id="ticket-panel-copy" class="panel-copy">Çalışan destek taleplerini buradan açıp takip edebilirsiniz.</p>
           <form id="ticket-form" class="tool-form">
-            <input id="ticket-requester" type="text" placeholder="Talep sahibi kullanıcı adı" />
-            <textarea id="ticket-message" rows="3" placeholder="Talep metni"></textarea>
+            <input id="ticket-requester" type="text" placeholder="Talep sahibi çalışan kullanıcı adı" />
+            <textarea id="ticket-message" rows="3" placeholder="Sorunu veya talep metnini yazın"></textarea>
             <select id="ticket-priority" aria-label="Öncelik">
               <option value="normal">Normal</option>
               <option value="acil">Acil</option>
               <option value="kritik">Kritik</option>
             </select>
-            <button type="submit">Ticket Aç</button>
+            <button type="submit">Talep Aç</button>
           </form>
           <div id="ticket-output" class="tool-output"></div>
           <div id="ticket-list" class="ticket-list"></div>

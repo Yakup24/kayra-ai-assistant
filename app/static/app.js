@@ -53,8 +53,15 @@ const roleLabels = {
   employee: "Çalışan",
   it: "IT",
   hr: "İK",
-  support: "Destek",
+  support: "Destek Uzmanı",
   admin: "Admin",
+};
+
+const ticketStatusLabels = {
+  open: "Açık",
+  in_progress: "İşlemde",
+  resolved: "Çözüldü",
+  closed: "Kapalı",
 };
 
 let authMode = "login";
@@ -93,7 +100,7 @@ function createElement(tag, className, text) {
 function setAuthMode(mode) {
   authMode = mode;
   authTabs.forEach((tab) => tab.classList.toggle("active", tab.dataset.authMode === mode));
-  authSubmit.textContent = mode === "admin" ? "Admin Girişi" : mode === "support" ? "Destek Girişi" : "Giriş Yap";
+  authSubmit.textContent = mode === "admin" ? "Admin Girişi" : mode === "support" ? "Destek Uzmanı Girişi" : "Çalışan Girişi";
   authMessage.textContent = "";
   if (mode === "admin") {
     authUsername.value = authUsername.value || "admin";
@@ -179,7 +186,7 @@ async function enterApp() {
   }
   await loadConversationHistory();
   if (!messages.children.length) {
-    addMessage("Merhaba, ben Kayra. Kurumsal bilgi tabanından kaynaklı cevap hazırlayabilir, gerektiğinde destek talebi açıp süreci takip edebilirim.", "assistant");
+    addMessage("Merhaba, ben Kayra. Çalışan destek taleplerini anlayabilir, bilgi tabanından kaynaklı cevap hazırlayabilir ve gerektiğinde ticket açıp süreci takip edebilirim.", "assistant");
   }
 }
 
@@ -208,20 +215,20 @@ function configureTicketPanel() {
   ticketRequester.classList.toggle("hidden", !canManageTickets());
   ticketRequester.value = canManageTickets() ? ticketRequester.value : "";
   if (isAdmin()) {
-    ticketPanelTitle.textContent = "Operasyon Talepleri";
+    ticketPanelTitle.textContent = "Tüm Çalışan Talepleri";
     ticketPanelMode.textContent = "Admin görünümü";
-    ticketPanelCopy.textContent = "Tüm talepleri, öncelikleri ve destek atamalarını buradan izleyebilirsiniz.";
-    ticketMessage.placeholder = "Talep metni veya kullanıcıdan gelen destek notu";
+    ticketPanelCopy.textContent = "Çalışanların açtığı tüm talepleri, öncelikleri, destek atamalarını ve çözüm notlarını izleyebilirsiniz.";
+    ticketMessage.placeholder = "Talep metni veya çalışandan gelen destek notu";
   } else if (isSupport()) {
     ticketPanelTitle.textContent = "Destek Uzmanı Kuyruğu";
-    ticketPanelMode.textContent = "Sadece ticket";
-    ticketPanelCopy.textContent = "Açık talepleri alın, işlem durumunu güncelleyin ve çözülen kayıtları kapatın.";
-    ticketMessage.placeholder = "Kullanıcı adına yeni talep açmak için talep metni";
+    ticketPanelMode.textContent = "Çözüm ekranı";
+    ticketPanelCopy.textContent = "Çalışanlardan gelen sorunları alın, işlem durumuna taşıyın ve çözüm notuyla kapatın.";
+    ticketMessage.placeholder = "Çalışan adına yeni sorun/talep açmak için metin";
   } else {
-    ticketPanelTitle.textContent = "Taleplerim";
-    ticketPanelMode.textContent = "Kullanıcı";
-    ticketPanelCopy.textContent = "Yeni destek talebi açabilir ve kendi taleplerinizin durumunu takip edebilirsiniz.";
-    ticketMessage.placeholder = "Destek talebinizi kısa ve net yazın";
+    ticketPanelTitle.textContent = "Çalışan Taleplerim";
+    ticketPanelMode.textContent = "Çalışan";
+    ticketPanelCopy.textContent = "Yaşadığınız sorunu yazıp destek talebi açın; çözüm durumunu ve destek notunu buradan takip edin.";
+    ticketMessage.placeholder = "Yaşadığınız sorunu, hata mesajını ve ihtiyacınızı yazın";
   }
 }
 
@@ -397,7 +404,7 @@ async function checkHealth() {
     const data = await response.json();
     healthStatus.textContent = "Çevrimiçi";
     knowledgeCount.textContent = `${data.indexed_chunks} parça`;
-    connectionCopy.textContent = isAdmin() ? "Admin mod" : isSupport() ? "Destek modu" : "Kullanıcı mod";
+    connectionCopy.textContent = isAdmin() ? "Admin mod" : isSupport() ? "Destek uzmanı modu" : "Çalışan modu";
   } catch (error) {
     healthStatus.textContent = "Bağlantı yok";
     knowledgeCount.textContent = "-";
@@ -548,7 +555,7 @@ async function createUser(event) {
     role: newUserRole.value,
   };
   if (!payload.username || payload.password.length < 6) {
-    userOutput.textContent = "Kullanıcı adı ve en az 6 karakter şifre gerekli.";
+    userOutput.textContent = "Hesap kullanıcı adı ve en az 6 karakter şifre gerekli.";
     return;
   }
 
@@ -559,7 +566,7 @@ async function createUser(event) {
   });
   const result = await response.json();
   if (!response.ok) {
-    userOutput.textContent = result.detail || "Kullanıcı oluşturulamadı.";
+    userOutput.textContent = result.detail || "Hesap oluşturulamadı.";
     return;
   }
 
@@ -595,7 +602,7 @@ async function setUserStatus(username, active) {
   });
   if (!response.ok) {
     const result = await response.json();
-    userOutput.textContent = result.detail || "Kullanıcı durumu değiştirilemedi.";
+    userOutput.textContent = result.detail || "Hesap durumu değiştirilemedi.";
     return;
   }
   userOutput.textContent = `${username} ${active ? "aktifleştirildi" : "pasifleştirildi"}.`;
@@ -629,13 +636,15 @@ async function loadTickets() {
     const row = createElement("div", "ticket-item");
     const info = createElement("div", "ticket-info");
     info.appendChild(createElement("strong", null, `${ticket.id} · ${ticket.title}`));
-    info.appendChild(createElement("span", null, `${ticket.category} · ${ticket.priority} · ${ticket.status} · ${ticket.requester}`));
+    info.appendChild(createElement("span", null, `${ticket.category} · ${ticket.priority} · ${ticketStatusLabels[ticket.status] || ticket.status} · ${ticket.requester}`));
+    if (ticket.resolution_note) {
+      info.appendChild(createElement("em", "resolution-note", `Çözüm: ${ticket.resolution_note}`));
+    }
     const actions = createElement("div", "inline-actions");
     if (canManageTickets()) {
       [
-        ["open", "Açık"],
-        ["in_progress", "İşlemde"],
-        ["resolved", "Çözüldü"],
+        ["in_progress", "İşleme al"],
+        ["resolved", "Çöz"],
       ].forEach(([status, label]) => {
         const button = createElement("button", null, label);
         button.type = "button";
@@ -658,6 +667,14 @@ async function updateTicketStatus(ticketId, status) {
   const payload = { status };
   if (isSupport() && status === "in_progress") {
     payload.assignee = currentUser.username;
+  }
+  const resolutionNote =
+    status === "resolved"
+      ? prompt("Çözüm notu yazın. Çalışan bu notu kendi talebinde görecek.", "Sorun incelendi ve çözüldü.")
+      : null;
+  if (status === "resolved" && !resolutionNote) return;
+  if (resolutionNote) {
+    payload.resolution_note = resolutionNote;
   }
   await fetch(endpoint, {
     method: "PATCH",
