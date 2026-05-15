@@ -794,13 +794,17 @@ select:focus {
   margin-top: 5px;
 }
 
-.user-list {
+.user-list,
+.ticket-list,
+.document-list {
   margin-top: 10px;
   display: grid;
   gap: 8px;
 }
 
-.user-item {
+.user-item,
+.ticket-item,
+.document-item {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
@@ -811,34 +815,48 @@ select:focus {
   padding: 10px;
 }
 
-.user-info {
+.user-info,
+.ticket-info,
+.document-info {
   min-width: 0;
 }
 
 .user-info strong,
-.user-info span {
+.user-info span,
+.ticket-info strong,
+.ticket-info span,
+.document-info strong,
+.document-info span {
   display: block;
 }
 
-.user-info strong {
+.user-info strong,
+.ticket-info strong,
+.document-info strong {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 0.88rem;
 }
 
-.user-info span {
+.user-info span,
+.ticket-info span,
+.document-info span {
   margin-top: 4px;
   color: var(--muted);
   font-size: 0.76rem;
 }
 
-.user-actions {
+.user-actions,
+.inline-actions {
   display: flex;
   gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
-.user-actions button {
+.user-actions button,
+.inline-actions button {
   min-height: 30px;
   border: 1px solid var(--line);
   border-radius: 8px;

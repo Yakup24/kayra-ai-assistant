@@ -130,6 +130,18 @@ class KnowledgeDocumentResponse(BaseModel):
     indexed_chunks: int
 
 
+class KnowledgeDocumentInfo(BaseModel):
+    filename: str
+    title: str
+    category: str
+    size: int
+    updated_at: str
+
+
+class KnowledgeDocumentListResponse(BaseModel):
+    documents: List[KnowledgeDocumentInfo]
+
+
 class TicketDraftRequest(BaseModel):
     message: str = Field(..., min_length=3, max_length=2000)
     priority: str = Field(default="normal", max_length=30)
@@ -143,6 +155,36 @@ class TicketDraftResponse(BaseModel):
     summary: str
     acceptance_criteria: List[str]
     escalation_required: bool
+
+
+class TicketCreateRequest(BaseModel):
+    message: str = Field(..., min_length=3, max_length=2000)
+    priority: str = Field(default="normal", max_length=30)
+    requester: Optional[str] = Field(default=None, max_length=120)
+
+
+class TicketRecord(BaseModel):
+    id: str
+    title: str
+    priority: str
+    category: str
+    summary: str
+    status: str
+    requester: str
+    assignee: Optional[str] = None
+    escalation_required: bool
+    created_at: str
+    updated_at: str
+
+
+class TicketListResponse(BaseModel):
+    tickets: List[TicketRecord]
+
+
+class TicketUpdateRequest(BaseModel):
+    status: Optional[str] = Field(default=None, max_length=30)
+    assignee: Optional[str] = Field(default=None, max_length=120)
+    priority: Optional[str] = Field(default=None, max_length=30)
 
 
 class LoginRequest(BaseModel):
@@ -182,6 +224,27 @@ class PasswordResetRequest(BaseModel):
 
 class UserStatusRequest(BaseModel):
     active: bool
+
+
+class IntegrationConfig(BaseModel):
+    id: str
+    name: str
+    category: str
+    status: str
+    enabled: bool
+    endpoint: Optional[str] = None
+    description: str
+    updated_at: str
+
+
+class IntegrationListResponse(BaseModel):
+    integrations: List[IntegrationConfig]
+
+
+class IntegrationUpdateRequest(BaseModel):
+    status: Optional[str] = Field(default=None, max_length=40)
+    enabled: Optional[bool] = None
+    endpoint: Optional[str] = Field(default=None, max_length=240)
 
 
 class ConversationMessage(BaseModel):

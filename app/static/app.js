@@ -28,10 +28,12 @@ const ticketForm = document.querySelector("#ticket-form");
 const ticketMessage = document.querySelector("#ticket-message");
 const ticketPriority = document.querySelector("#ticket-priority");
 const ticketOutput = document.querySelector("#ticket-output");
+const ticketList = document.querySelector("#ticket-list");
 const documentForm = document.querySelector("#document-form");
 const documentTitle = document.querySelector("#document-title");
 const documentContent = document.querySelector("#document-content");
 const documentOutput = document.querySelector("#document-output");
+const documentList = document.querySelector("#document-list");
 const userForm = document.querySelector("#user-form");
 const userOutput = document.querySelector("#user-output");
 const userList = document.querySelector("#user-list");
@@ -142,7 +144,7 @@ async function enterApp() {
   applyModeVisibility();
   await Promise.all([checkHealth(), loadTopics()]);
   if (currentUser.role === "admin") {
-    await Promise.all([loadOverview(), loadAudit(), loadUsers()]);
+    await Promise.all([loadOverview(), loadAudit(), loadUsers(), loadTickets(), loadDocuments(), loadIntegrations()]);
   }
   await loadConversationHistory();
   if (!messages.children.length) {
@@ -344,7 +346,6 @@ async function loadOverview() {
 
   renderMetrics(data.metrics || []);
   renderNamedList("#capability-list", data.capabilities || []);
-  renderNamedList("#integration-list", data.integrations || []);
   renderSecurity(data.security_controls || []);
 }
 
@@ -433,6 +434,40 @@ async function loadUsers() {
   });
 }
 
+async function loadIntegrations() {
+  const response = await fetch("/api/admin/integrations", { headers: authHeaders() });
+  if (!response.ok) return;
+  const data = await response.json();
+  const list = document.querySelector("#integration-list");
+  list.replaceChildren();
+
+  data.integrations.forEach((item) => {
+    const row = createElement("div", "stack-item integration-item");
+    const title = createElement("div", "stack-title");
+    title.appendChild(createElement("strong", null, item.name));
+    title.appendChild(createElement("span", null, item.enabled ? "Aktif" : item.status));
+    row.appendChild(title);
+    row.appendChild(createElement("p", null, item.description));
+
+    const actions = createElement("div", "inline-actions");
+    const toggle = createElement("button", null, item.enabled ? "Pasifleştir" : "Aktifleştir");
+    toggle.type = "button";
+    toggle.addEventListener("click", () => toggleIntegration(item.id, !item.enabled));
+    actions.appendChild(toggle);
+    row.appendChild(actions);
+    list.appendChild(row);
+  });
+}
+
+async function toggleIntegration(id, enabled) {
+  await fetch(`/api/admin/integrations/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ enabled, status: enabled ? "Aktif" : "Pasif" }),
+  });
+  await Promise.all([loadIntegrations(), loadAudit()]);
+}
+
 async function createUser(event) {
   event.preventDefault();
   const payload = {
@@ -507,21 +542,60 @@ async function loadConversationHistory() {
   });
 }
 
+async function loadTickets() {
+  const response = await fetch("/api/admin/tickets", { headers: authHeaders() });
+  if (!response.ok) return;
+  const data = await response.json();
+  ticketList.replaceChildren();
+
+  if (!data.tickets.length) {
+    ticketList.appendChild(createElement("p", "empty-state", "Henüz ticket yok."));
+    return;
+  }
+
+  data.tickets.slice(0, 8).forEach((ticket) => {
+    const row = createElement("div", "ticket-item");
+    const info = createElement("div", "ticket-info");
+    info.appendChild(createElement("strong", null, `${ticket.id} · ${ticket.title}`));
+    info.appendChild(createElement("span", null, `${ticket.category} · ${ticket.priority} · ${ticket.status}`));
+    const actions = createElement("div", "inline-actions");
+    ["open", "in_progress", "resolved"].forEach((status) => {
+      const button = createElement("button", null, status);
+      button.type = "button";
+      button.addEventListener("click", () => updateTicketStatus(ticket.id, status));
+      actions.appendChild(button);
+    });
+    row.append(info, actions);
+    ticketList.appendChild(row);
+  });
+}
+
+async function updateTicketStatus(ticketId, status) {
+  await fetch(`/api/admin/tickets/${encodeURIComponent(ticketId)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ status }),
+  });
+  await Promise.all([loadTickets(), loadAudit(), loadOverview()]);
+}
+
 async function createTicketDraft(event) {
   event.preventDefault();
   const message = ticketMessage.value.trim();
   if (!message) return;
 
-  const response = await fetch("/api/tickets/draft", {
+  const response = await fetch("/api/tickets", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify({ message, priority: ticketPriority.value }),
   });
-  const draft = await response.json();
+  const ticket = await response.json();
   ticketOutput.replaceChildren();
-  ticketOutput.appendChild(createElement("strong", null, draft.title));
-  ticketOutput.appendChild(createElement("p", null, `${draft.category} · ${draft.priority}`));
-  draft.acceptance_criteria.forEach((item) => ticketOutput.appendChild(createElement("span", "mini-line", item)));
+  ticketOutput.appendChild(createElement("strong", null, `${ticket.id} açıldı`));
+  ticketOutput.appendChild(createElement("p", null, `${ticket.category} · ${ticket.priority} · ${ticket.status}`));
+  ticketOutput.appendChild(createElement("span", "mini-line", ticket.summary));
+  ticketMessage.value = "";
+  await Promise.all([loadTickets(), loadOverview(), loadAudit()]);
 }
 
 async function addKnowledgeDocument(event) {
@@ -546,6 +620,39 @@ async function addKnowledgeDocument(event) {
   checkHealth();
   loadOverview();
   loadAudit();
+  loadDocuments();
+}
+
+async function loadDocuments() {
+  const response = await fetch("/api/admin/documents", { headers: authHeaders() });
+  if (!response.ok) return;
+  const data = await response.json();
+  documentList.replaceChildren();
+
+  data.documents.forEach((doc) => {
+    const row = createElement("div", "document-item");
+    const info = createElement("div", "document-info");
+    info.appendChild(createElement("strong", null, doc.title));
+    info.appendChild(createElement("span", null, `${doc.category} · ${doc.filename} · ${Math.ceil(doc.size / 1024)} KB`));
+    const actions = createElement("div", "inline-actions");
+    const remove = createElement("button", null, "Sil");
+    remove.type = "button";
+    remove.addEventListener("click", () => deleteDocument(doc.filename));
+    actions.appendChild(remove);
+    row.append(info, actions);
+    documentList.appendChild(row);
+  });
+}
+
+async function deleteDocument(filename) {
+  if (!confirm(`${filename} silinsin mi?`)) return;
+  const response = await fetch(`/api/admin/documents/${encodeURIComponent(filename)}`, {
+    method: "DELETE",
+    headers: authHeaders(),
+  });
+  const result = await response.json();
+  documentOutput.textContent = response.ok ? `${filename} silindi. ${result.indexed_chunks} parça kaldı.` : result.detail || "Doküman silinemedi.";
+  await Promise.all([loadDocuments(), checkHealth(), loadOverview(), loadAudit()]);
 }
 
 function scrollToLatest() {
@@ -585,6 +692,9 @@ refreshOverview.addEventListener("click", () => {
   loadOverview();
   loadAudit();
   loadUsers();
+  loadTickets();
+  loadDocuments();
+  loadIntegrations();
 });
 ticketForm.addEventListener("submit", createTicketDraft);
 documentForm.addEventListener("submit", addKnowledgeDocument);

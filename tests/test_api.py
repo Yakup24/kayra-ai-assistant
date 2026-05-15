@@ -73,6 +73,50 @@ def test_ticket_draft_endpoint_classifies_it_request():
     assert payload["escalation_required"] is True
 
 
+def test_ticket_lifecycle_persists_to_database():
+    headers = auth_headers()
+    create = client.post(
+        "/api/tickets",
+        json={"message": "VPN erisim sorunu var", "priority": "acil"},
+        headers=headers,
+    )
+    assert create.status_code == 200
+    ticket = create.json()
+    assert ticket["id"].startswith("KAYRA-")
+    assert ticket["status"] == "open"
+
+    update = client.patch(
+        f"/api/admin/tickets/{ticket['id']}",
+        json={"status": "resolved", "assignee": "it-team"},
+        headers=headers,
+    )
+    assert update.status_code == 200
+    assert update.json()["status"] == "resolved"
+
+    tickets = client.get("/api/admin/tickets", headers=headers)
+    assert tickets.status_code == 200
+    assert any(item["id"] == ticket["id"] for item in tickets.json()["tickets"])
+
+
+def test_admin_can_list_documents_and_toggle_integrations():
+    headers = auth_headers()
+    docs = client.get("/api/admin/documents", headers=headers)
+    assert docs.status_code == 200
+    assert docs.json()["documents"]
+
+    integrations = client.get("/api/admin/integrations", headers=headers)
+    assert integrations.status_code == 200
+    assert any(item["id"] == "jira" for item in integrations.json()["integrations"])
+
+    update = client.patch(
+        "/api/admin/integrations/jira",
+        json={"enabled": True, "status": "Aktif"},
+        headers=headers,
+    )
+    assert update.status_code == 200
+    assert any(item["id"] == "jira" and item["enabled"] for item in update.json()["integrations"])
+
+
 def test_registered_user_cannot_access_admin_overview():
     username = f"user_{uuid4().hex[:8]}"
     create = client.post(

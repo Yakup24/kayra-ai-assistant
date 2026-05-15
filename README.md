@@ -15,9 +15,11 @@ Kayra; müşteri destek, IT, İK, uyumluluk, operasyon, ticket taslağı, audit 
 - SQLite tabanlı admin kontrollü kullanıcı veritabanı
 - Alan, güven skoru, risk seviyesi ve sonraki aksiyon üretimi
 - Ticket taslağı üretimi
+- SQLite tabanlı kalıcı ticket kayıtları ve durum güncelleme
 - Admin doküman ekleme ve yeniden indeksleme
+- Bilgi tabanı doküman kataloğu
 - Audit trail ve operasyon metrikleri
-- Entegrasyon durum paneli: Graph, Jira/ServiceNow, Qdrant/pgvector, SSO
+- Yönetilebilir entegrasyon durum paneli: Graph, Jira/ServiceNow, Qdrant/pgvector, SSO
 - KVKK/GDPR için temel veri maskeleme örnekleri
 - Feedback endpoint'i
 - Docker desteği
@@ -135,6 +137,23 @@ curl -X POST http://127.0.0.1:8000/api/tickets/draft ^
   -d "{\"message\":\"VPN erişim sorunu var\",\"priority\":\"acil\"}"
 ```
 
+Kalıcı ticket açma:
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/tickets ^
+  -H "Content-Type: application/json" ^
+  -H "Authorization: Bearer TOKEN" ^
+  -d "{\"message\":\"VPN erişim sorunu var\",\"priority\":\"acil\"}"
+```
+
+Admin operasyon listeleri:
+
+```bash
+curl http://127.0.0.1:8000/api/admin/tickets -H "Authorization: Bearer TOKEN"
+curl http://127.0.0.1:8000/api/admin/integrations -H "Authorization: Bearer TOKEN"
+curl http://127.0.0.1:8000/api/admin/documents -H "Authorization: Bearer TOKEN"
+```
+
 Bilgi tabanına doküman ekleme:
 
 ```bash
@@ -156,6 +175,7 @@ app/
     response.py            Chat cevap üretimi
     enterprise.py          Enterprise overview, audit, ticket ve admin servisleri
     auth.py                SQLite kullanıcı veritabanı, parola hash ve token yönetimi
+    ops.py                 Ticket, entegrasyon ve doküman kataloğu servisleri
     conversation.py        Kayıtlı sohbet geçmişi
     online.py              Anahtarsız online bilgi arama adaptörü
     privacy.py             Veri maskeleme yardımcıları

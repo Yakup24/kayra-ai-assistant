@@ -14,12 +14,19 @@ from app.schemas import (
     FeedbackRequest,
     FeedbackResponse,
     HealthResponse,
+    IntegrationListResponse,
+    IntegrationUpdateRequest,
     KnowledgeDocumentRequest,
+    KnowledgeDocumentListResponse,
     KnowledgeDocumentResponse,
     LoginRequest,
     PasswordResetRequest,
     TicketDraftRequest,
     TicketDraftResponse,
+    TicketCreateRequest,
+    TicketListResponse,
+    TicketRecord,
+    TicketUpdateRequest,
     Topic,
     TopicsResponse,
     UserCreateRequest,
@@ -32,6 +39,7 @@ from app.services.auth import AuthService
 from app.services.conversation import ConversationStore
 from app.services.enterprise import EnterpriseService
 from app.services.online import OnlineSearchService
+from app.services.ops import OpsService
 from app.services.rag import KnowledgeBase
 from app.services.response import ResponseGenerator
 
@@ -49,6 +57,7 @@ auth_service = AuthService(
 )
 conversation_store = ConversationStore(settings.log_dir / "conversations")
 online_search = OnlineSearchService()
+ops_service = OpsService(settings.log_dir / "ops.sqlite3", settings.knowledge_dir)
 
 TOPICS = [
     Topic(id="returns", title="İade ve Kargo", category="Müşteri Destek", prompt="İade süreci nasıl işliyor?"),
@@ -210,6 +219,74 @@ def audit_trail(_: UserProfile = Depends(admin_user)) -> AuditTrailResponse:
     return AuditTrailResponse(events=enterprise.audit_events())
 
 
+@app.get("/api/admin/tickets", response_model=TicketListResponse)
+def list_tickets(_: UserProfile = Depends(admin_user)) -> TicketListResponse:
+    return TicketListResponse(tickets=ops_service.list_tickets())
+
+
+@app.patch("/api/admin/tickets/{ticket_id}", response_model=TicketRecord)
+def update_ticket(ticket_id: str, request: TicketUpdateRequest, admin: UserProfile = Depends(admin_user)) -> TicketRecord:
+    try:
+        ticket = ops_service.update_ticket(
+            ticket_id,
+            status=request.status,
+            assignee=request.assignee,
+            priority=request.priority,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    analytics.log_chat(
+        {
+            "session_id": "admin",
+            "message": f"ticket_updated:{ticket.id}:{ticket.status}",
+            "confidence": 1,
+            "handoff_recommended": False,
+            "source_count": 0,
+            "domain": "Admin",
+            "risk_level": "düşük",
+            "response_time_ms": 1,
+            "username": admin.username,
+        }
+    )
+    return ticket
+
+
+@app.get("/api/admin/integrations", response_model=IntegrationListResponse)
+def list_integrations(_: UserProfile = Depends(admin_user)) -> IntegrationListResponse:
+    return IntegrationListResponse(integrations=ops_service.list_integrations())
+
+
+@app.patch("/api/admin/integrations/{integration_id}", response_model=IntegrationListResponse)
+def update_integration(
+    integration_id: str,
+    request: IntegrationUpdateRequest,
+    admin: UserProfile = Depends(admin_user),
+) -> IntegrationListResponse:
+    try:
+        ops_service.update_integration(
+            integration_id,
+            status=request.status,
+            enabled=request.enabled,
+            endpoint=request.endpoint,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    analytics.log_chat(
+        {
+            "session_id": "admin",
+            "message": f"integration_updated:{integration_id}",
+            "confidence": 1,
+            "handoff_recommended": False,
+            "source_count": 0,
+            "domain": "Admin",
+            "risk_level": "düşük",
+            "response_time_ms": 1,
+            "username": admin.username,
+        }
+    )
+    return IntegrationListResponse(integrations=ops_service.list_integrations())
+
+
 @app.post("/api/chat", response_model=ChatResponse)
 def chat(request: ChatRequest, user: UserProfile = Depends(current_user)) -> ChatResponse:
     context = conversation_store.recent_context(request.session_id or user.id)
@@ -273,6 +350,11 @@ def reindex(_: UserProfile = Depends(admin_user)) -> HealthResponse:
     return HealthResponse(status="reindexed", indexed_chunks=len(knowledge_base.chunks), app_name=settings.app_name)
 
 
+@app.get("/api/admin/documents", response_model=KnowledgeDocumentListResponse)
+def list_documents(_: UserProfile = Depends(admin_user)) -> KnowledgeDocumentListResponse:
+    return KnowledgeDocumentListResponse(documents=ops_service.list_documents())
+
+
 @app.post("/api/admin/documents", response_model=KnowledgeDocumentResponse)
 def add_document(request: KnowledgeDocumentRequest, user: UserProfile = Depends(admin_user)) -> KnowledgeDocumentResponse:
     path = enterprise.save_document(settings.knowledge_dir, request.title, request.content, request.category)
@@ -293,7 +375,51 @@ def add_document(request: KnowledgeDocumentRequest, user: UserProfile = Depends(
     return KnowledgeDocumentResponse(status="saved", path=path.as_posix(), indexed_chunks=len(knowledge_base.chunks))
 
 
+@app.delete("/api/admin/documents/{filename}", response_model=KnowledgeDocumentResponse)
+def delete_document(filename: str, user: UserProfile = Depends(admin_user)) -> KnowledgeDocumentResponse:
+    try:
+        ops_service.delete_document(filename)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    knowledge_base.load()
+    analytics.log_chat(
+        {
+            "session_id": "admin",
+            "message": f"document_deleted:{filename}",
+            "confidence": 1,
+            "handoff_recommended": False,
+            "source_count": 0,
+            "domain": "Admin",
+            "risk_level": "orta",
+            "response_time_ms": 1,
+            "username": user.username,
+        }
+    )
+    return KnowledgeDocumentResponse(status="deleted", path=filename, indexed_chunks=len(knowledge_base.chunks))
+
+
 @app.post("/api/tickets/draft", response_model=TicketDraftResponse)
 def draft_ticket(request: TicketDraftRequest, user: UserProfile = Depends(current_user)) -> TicketDraftResponse:
     requester = request.requester or user.username
     return enterprise.draft_ticket(request.message, request.priority, requester)
+
+
+@app.post("/api/tickets", response_model=TicketRecord)
+def create_ticket(request: TicketCreateRequest, user: UserProfile = Depends(current_user)) -> TicketRecord:
+    requester = request.requester or user.username
+    draft = enterprise.draft_ticket(request.message, request.priority, requester)
+    ticket = ops_service.create_ticket(draft, requester)
+    analytics.log_chat(
+        {
+            "session_id": "ticket",
+            "message": f"ticket_created:{ticket.id}:{ticket.category}",
+            "confidence": 1,
+            "handoff_recommended": ticket.escalation_required,
+            "source_count": 0,
+            "domain": ticket.category,
+            "risk_level": "orta" if ticket.escalation_required else "düşük",
+            "response_time_ms": 1,
+            "username": user.username,
+        }
+    )
+    return ticket
