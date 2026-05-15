@@ -621,9 +621,15 @@ async function loadConversationHistory() {
 
 async function loadTickets() {
   const endpoint = isAdmin() ? "/api/admin/tickets" : isSupport() ? "/api/support/tickets" : "/api/tickets/me";
-  const response = await fetch(endpoint, { headers: authHeaders() });
-  if (!response.ok) return;
-  const data = await response.json();
+  let data;
+  try {
+    const response = await fetch(endpoint, { headers: authHeaders() });
+    data = await response.json();
+    if (!response.ok) throw new Error(data.detail || "Ticket listesi alınamadı.");
+  } catch (error) {
+    ticketOutput.textContent = error.message || "Ticket listesi alınamadı.";
+    return;
+  }
   ticketList.replaceChildren();
 
   if (!data.tickets.length) {
@@ -636,19 +642,29 @@ async function loadTickets() {
     const row = createElement("div", "ticket-item");
     const info = createElement("div", "ticket-info");
     info.appendChild(createElement("strong", null, `${ticket.id} · ${ticket.title}`));
-    info.appendChild(createElement("span", null, `${ticket.category} · ${ticket.priority} · ${ticketStatusLabels[ticket.status] || ticket.status} · ${ticket.requester}`));
+    info.appendChild(createElement("span", null, `${ticket.category} · ${ticket.priority} · ${ticketStatusLabels[ticket.status] || ticket.status} · Çalışan: ${ticket.requester}`));
+    info.appendChild(createElement("span", "ticket-meta", `Atanan: ${ticket.assignee || "Henüz yok"}`));
     if (ticket.resolution_note) {
       info.appendChild(createElement("em", "resolution-note", `Çözüm: ${ticket.resolution_note}`));
     }
     const actions = createElement("div", "inline-actions");
     if (canManageTickets()) {
-      [
-        ["in_progress", "İşleme al"],
-        ["resolved", "Çöz"],
-      ].forEach(([status, label]) => {
+      const actionSet = [];
+      if (ticket.status === "open") {
+        actionSet.push(["in_progress", "İşleme al"]);
+      } else if (ticket.status === "in_progress") {
+        actionSet.push(["in_progress", ticket.assignee === currentUser.username ? "Üzerimde" : "Devral"]);
+      }
+      if (ticket.status !== "resolved") {
+        actionSet.push(["resolved", "Çöz"]);
+      }
+      actionSet.forEach(([status, label]) => {
         const button = createElement("button", null, label);
         button.type = "button";
-        button.addEventListener("click", () => updateTicketStatus(ticket.id, status));
+        if (status === "in_progress" && ticket.status === "in_progress" && ticket.assignee === currentUser.username) {
+          button.disabled = true;
+        }
+        button.addEventListener("click", () => updateTicketStatus(ticket.id, status, button));
         actions.appendChild(button);
       });
     } else {
@@ -662,7 +678,7 @@ async function loadTickets() {
   });
 }
 
-async function updateTicketStatus(ticketId, status) {
+async function updateTicketStatus(ticketId, status, button = null) {
   const endpoint = isAdmin() ? `/api/admin/tickets/${encodeURIComponent(ticketId)}` : `/api/support/tickets/${encodeURIComponent(ticketId)}`;
   const payload = { status };
   if (isSupport() && status === "in_progress") {
@@ -676,14 +692,44 @@ async function updateTicketStatus(ticketId, status) {
   if (resolutionNote) {
     payload.resolution_note = resolutionNote;
   }
-  await fetch(endpoint, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json", ...authHeaders() },
-    body: JSON.stringify(payload),
-  });
-  const refreshes = [loadTickets()];
-  if (isAdmin()) refreshes.push(loadAudit(), loadOverview());
-  await Promise.all(refreshes);
+  const originalLabel = button?.textContent;
+  if (button) {
+    button.disabled = true;
+    button.textContent = "İşleniyor";
+  }
+  ticketOutput.textContent = "";
+  try {
+    const response = await fetch(endpoint, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      body: JSON.stringify(payload),
+    });
+    const updated = await response.json();
+    if (!response.ok) throw new Error(updated.detail || "Ticket güncellenemedi.");
+
+    ticketOutput.replaceChildren();
+    ticketOutput.appendChild(createElement("strong", null, `${updated.id} güncellendi`));
+    ticketOutput.appendChild(
+      createElement(
+        "p",
+        null,
+        `${ticketStatusLabels[updated.status] || updated.status} · Atanan: ${updated.assignee || "Henüz yok"}`
+      )
+    );
+    if (updated.resolution_note) {
+      ticketOutput.appendChild(createElement("span", "mini-line", `Çözüm: ${updated.resolution_note}`));
+    }
+
+    const refreshes = [loadTickets()];
+    if (isAdmin()) refreshes.push(loadAudit(), loadOverview());
+    await Promise.all(refreshes);
+  } catch (error) {
+    ticketOutput.textContent = error.message || "Ticket güncellenemedi.";
+    if (button) {
+      button.disabled = false;
+      button.textContent = originalLabel;
+    }
+  }
 }
 
 async function createTicketDraft(event) {

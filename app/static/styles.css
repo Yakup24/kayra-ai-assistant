@@ -888,6 +888,13 @@ select:focus {
   font-size: 0.76rem;
 }
 
+.inline-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.64;
+  background: #eef3f2;
+  color: var(--muted);
+}
+
 .empty-state {
   color: var(--muted);
   font-size: 0.84rem;
