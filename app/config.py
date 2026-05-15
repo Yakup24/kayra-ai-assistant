@@ -12,6 +12,8 @@ class Settings:
     auth_secret: str = os.getenv("AUTH_SECRET", "change-this-kayra-dev-secret")
     admin_username: str = os.getenv("ADMIN_USERNAME", "admin")
     admin_password: str = os.getenv("ADMIN_PASSWORD", "KayraAdmin2026!")
+    support_username: str = os.getenv("SUPPORT_USERNAME", "support")
+    support_password: str = os.getenv("SUPPORT_PASSWORD", "KayraSupport2026!")
 
 
 @lru_cache

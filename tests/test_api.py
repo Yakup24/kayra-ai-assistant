@@ -131,6 +131,67 @@ def test_registered_user_cannot_access_admin_overview():
     assert response.status_code == 403
 
 
+def test_support_specialist_can_only_manage_ticket_queue():
+    admin_headers = auth_headers()
+    create = client.post(
+        "/api/tickets",
+        json={"message": "Kargo teslimat sorunu için temsilci desteği lazım", "priority": "normal"},
+        headers=admin_headers,
+    )
+    assert create.status_code == 200
+    ticket = create.json()
+
+    support_username = f"support_{uuid4().hex[:8]}"
+    support_create = client.post(
+        "/api/admin/users",
+        json={"username": support_username, "password": "secret123", "role": "support"},
+        headers=admin_headers,
+    )
+    assert support_create.status_code == 200
+    support_headers = auth_headers(support_username, "secret123")
+    queue = client.get("/api/support/tickets", headers=support_headers)
+    assert queue.status_code == 200
+    assert any(item["id"] == ticket["id"] for item in queue.json()["tickets"])
+
+    update = client.patch(
+        f"/api/support/tickets/{ticket['id']}",
+        json={"status": "in_progress"},
+        headers=support_headers,
+    )
+    assert update.status_code == 200
+    assert update.json()["assignee"] == support_username
+
+    blocked = client.get("/api/admin/users", headers=support_headers)
+    assert blocked.status_code == 403
+
+
+def test_user_can_see_only_own_tickets():
+    username = f"employee_{uuid4().hex[:8]}"
+    create_user = client.post(
+        "/api/admin/users",
+        json={"username": username, "password": "secret123", "role": "employee"},
+        headers=auth_headers(),
+    )
+    assert create_user.status_code == 200
+    user_headers = auth_headers(username, "secret123")
+
+    create_ticket = client.post(
+        "/api/tickets",
+        json={"message": "VPN erişim sorunum var", "priority": "normal", "requester": "someone_else"},
+        headers=user_headers,
+    )
+    assert create_ticket.status_code == 200
+    ticket = create_ticket.json()
+    assert ticket["requester"] == username
+
+    mine = client.get("/api/tickets/me", headers=user_headers)
+    assert mine.status_code == 200
+    assert [item["id"] for item in mine.json()["tickets"]] == [ticket["id"]]
+
+    admin_list = client.get("/api/admin/tickets", headers=user_headers)
+    assert admin_list.status_code == 403
+
+
 def test_public_registration_is_not_available():
     response = client.post(
         "/api/auth/register",

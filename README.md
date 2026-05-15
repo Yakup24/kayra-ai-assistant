@@ -13,6 +13,9 @@ Kayra; müşteri destek, IT, İK, uyumluluk, operasyon, ticket taslağı, audit 
 - Enterprise control center arayüzü
 - Rol seçimi: genel, çalışan, IT, İK ve destek
 - SQLite tabanlı admin kontrollü kullanıcı veritabanı
+- Ayrı giriş akışları: kullanıcı, destek uzmanı ve admin
+- Destek uzmanı paneli: yalnızca açık ticket kuyruğu ve durum güncelleme
+- Kullanıcı paneli: yeni talep açma ve kendi ticket kayıtlarını takip etme
 - Alan, güven skoru, risk seviyesi ve sonraki aksiyon üretimi
 - Ticket taslağı üretimi
 - SQLite tabanlı kalıcı ticket kayıtları ve durum güncelleme
@@ -56,7 +59,8 @@ python -m uvicorn app.main:app --reload --port 8001
 4. Çalışan, admin tarafından verilen kullanıcı adı/şifre ile giriş yapar
 5. Sol panelden rol seçin: `Genel`, `Çalışan`, `IT`, `İK` veya `Destek`
 6. `Online bilgi ara` seçeneğini açarsanız Kayra web kaynaklarından kısa ek bağlam çekmeyi dener
-7. Admin girişiyle Control Center, audit, ticket studio ve bilgi tabanı yönetimi açılır
+7. Destek uzmanı girişiyle yalnızca ticket kuyruğu ve durum yönetimi açılır
+8. Admin girişiyle Control Center, audit, kullanıcı, entegrasyon, ticket ve bilgi tabanı yönetimi açılır
 
 Varsayılan geliştirme admin hesabı:
 
@@ -65,7 +69,15 @@ Kullanıcı adı: admin
 Şifre: KayraAdmin2026!
 ```
 
+Varsayılan geliştirme destek uzmanı hesabı:
+
+```text
+Kullanıcı adı: support
+Şifre: KayraSupport2026!
+```
+
 Üretimde `.env` ile `AUTH_SECRET`, `ADMIN_USERNAME` ve `ADMIN_PASSWORD` değerlerini değiştirin.
+Destek hesabı için `SUPPORT_USERNAME` ve `SUPPORT_PASSWORD` değerlerini de güncelleyin veya admin panelinden yeni destek uzmanı oluşturun.
 
 Not: Public/self kayıt yoktur. Kurumsal kullanımda kullanıcılar admin tarafından veritabanına eklenir.
 
@@ -152,6 +164,18 @@ Admin operasyon listeleri:
 curl http://127.0.0.1:8000/api/admin/tickets -H "Authorization: Bearer TOKEN"
 curl http://127.0.0.1:8000/api/admin/integrations -H "Authorization: Bearer TOKEN"
 curl http://127.0.0.1:8000/api/admin/documents -H "Authorization: Bearer TOKEN"
+```
+
+Destek uzmanı ticket kuyruğu:
+
+```bash
+curl http://127.0.0.1:8000/api/support/tickets -H "Authorization: Bearer TOKEN"
+```
+
+Kullanıcının kendi talepleri:
+
+```bash
+curl http://127.0.0.1:8000/api/tickets/me -H "Authorization: Bearer TOKEN"
 ```
 
 Bilgi tabanına doküman ekleme:

@@ -70,7 +70,7 @@ button {
 
 .auth-tabs {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
   margin-bottom: 18px;
 }
@@ -158,8 +158,9 @@ button {
   gap: 12px;
 }
 
-.app-shell.user-mode {
-  grid-template-columns: 286px minmax(460px, 1fr);
+.app-shell.user-mode,
+.app-shell.support-mode {
+  grid-template-columns: 286px minmax(460px, 1fr) 360px;
 }
 
 .nav-panel,
@@ -283,6 +284,11 @@ p {
   border-color: var(--accent);
   color: white;
   font-weight: 800;
+}
+
+.role-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
 }
 
 .topic-list {
@@ -651,6 +657,13 @@ select:focus {
   color: var(--muted);
   line-height: 1.4;
   font-size: 0.88rem;
+}
+
+.panel-copy {
+  margin-top: 8px;
+  color: var(--muted);
+  line-height: 1.45;
+  font-size: 0.84rem;
 }
 
 .control-section h3 {

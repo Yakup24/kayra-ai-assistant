@@ -54,6 +54,8 @@ auth_service = AuthService(
     settings.auth_secret,
     settings.admin_username,
     settings.admin_password,
+    settings.support_username,
+    settings.support_password,
 )
 conversation_store = ConversationStore(settings.log_dir / "conversations")
 online_search = OnlineSearchService()
@@ -68,7 +70,7 @@ TOPICS = [
     Topic(id="architecture", title="Mimari Yol Haritası", category="Platform", prompt="Kayra Enterprise mimarisi nasıl ölçeklenmeli?"),
 ]
 
-app = FastAPI(title=settings.app_name, version="0.2.0")
+app = FastAPI(title=settings.app_name, version="0.3.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -92,6 +94,12 @@ def current_user(authorization: str = Header(default="")) -> UserProfile:
 def admin_user(user: UserProfile = Depends(current_user)) -> UserProfile:
     if user.role != "admin":
         raise HTTPException(status_code=403, detail="Admin yetkisi gerekli.")
+    return user
+
+
+def support_user(user: UserProfile = Depends(current_user)) -> UserProfile:
+    if user.role not in {"admin", "support"}:
+        raise HTTPException(status_code=403, detail="Destek uzmanı yetkisi gerekli.")
     return user
 
 
@@ -251,6 +259,41 @@ def update_ticket(ticket_id: str, request: TicketUpdateRequest, admin: UserProfi
     return ticket
 
 
+@app.get("/api/support/tickets", response_model=TicketListResponse)
+def list_support_tickets(_: UserProfile = Depends(support_user)) -> TicketListResponse:
+    return TicketListResponse(tickets=ops_service.list_support_tickets())
+
+
+@app.patch("/api/support/tickets/{ticket_id}", response_model=TicketRecord)
+def update_support_ticket(ticket_id: str, request: TicketUpdateRequest, user: UserProfile = Depends(support_user)) -> TicketRecord:
+    assignee = request.assignee
+    if user.role == "support" and request.status in {"in_progress", "resolved"}:
+        assignee = user.username
+    try:
+        ticket = ops_service.update_ticket(
+            ticket_id,
+            status=request.status,
+            assignee=assignee,
+            priority=request.priority,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    analytics.log_chat(
+        {
+            "session_id": "support",
+            "message": f"support_ticket_updated:{ticket.id}:{ticket.status}",
+            "confidence": 1,
+            "handoff_recommended": ticket.escalation_required,
+            "source_count": 0,
+            "domain": ticket.category,
+            "risk_level": "orta" if ticket.escalation_required else "düşük",
+            "response_time_ms": 1,
+            "username": user.username,
+        }
+    )
+    return ticket
+
+
 @app.get("/api/admin/integrations", response_model=IntegrationListResponse)
 def list_integrations(_: UserProfile = Depends(admin_user)) -> IntegrationListResponse:
     return IntegrationListResponse(integrations=ops_service.list_integrations())
@@ -400,13 +443,13 @@ def delete_document(filename: str, user: UserProfile = Depends(admin_user)) -> K
 
 @app.post("/api/tickets/draft", response_model=TicketDraftResponse)
 def draft_ticket(request: TicketDraftRequest, user: UserProfile = Depends(current_user)) -> TicketDraftResponse:
-    requester = request.requester or user.username
+    requester = request.requester if user.role in {"admin", "support"} and request.requester else user.username
     return enterprise.draft_ticket(request.message, request.priority, requester)
 
 
 @app.post("/api/tickets", response_model=TicketRecord)
 def create_ticket(request: TicketCreateRequest, user: UserProfile = Depends(current_user)) -> TicketRecord:
-    requester = request.requester or user.username
+    requester = request.requester if user.role in {"admin", "support"} and request.requester else user.username
     draft = enterprise.draft_ticket(request.message, request.priority, requester)
     ticket = ops_service.create_ticket(draft, requester)
     analytics.log_chat(
@@ -423,3 +466,8 @@ def create_ticket(request: TicketCreateRequest, user: UserProfile = Depends(curr
         }
     )
     return ticket
+
+
+@app.get("/api/tickets/me", response_model=TicketListResponse)
+def my_tickets(user: UserProfile = Depends(current_user)) -> TicketListResponse:
+    return TicketListResponse(tickets=ops_service.list_tickets_for_requester(user.username))

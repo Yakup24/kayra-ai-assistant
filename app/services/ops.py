@@ -102,6 +102,35 @@ class OpsService:
             ).fetchall()
         return [self._ticket(dict(row)) for row in rows]
 
+    def list_support_tickets(self, limit: int = 80) -> list[TicketRecord]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT * FROM tickets
+                WHERE status NOT IN ('resolved', 'closed')
+                ORDER BY
+                    CASE priority
+                        WHEN 'kritik' THEN 0
+                        WHEN 'acil' THEN 1
+                        WHEN 'high' THEN 1
+                        WHEN 'urgent' THEN 1
+                        ELSE 2
+                    END,
+                    created_at ASC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+        return [self._ticket(dict(row)) for row in rows]
+
+    def list_tickets_for_requester(self, requester: str, limit: int = 30) -> list[TicketRecord]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT * FROM tickets WHERE requester = ? ORDER BY created_at DESC LIMIT ?",
+                (requester, limit),
+            ).fetchall()
+        return [self._ticket(dict(row)) for row in rows]
+
     def get_ticket(self, ticket_id: str) -> TicketRecord:
         with self._connect() as conn:
             row = conn.execute("SELECT * FROM tickets WHERE id = ?", (ticket_id,)).fetchone()

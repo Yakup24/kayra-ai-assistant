@@ -27,8 +27,12 @@ const refreshOverview = document.querySelector("#refresh-overview");
 const ticketForm = document.querySelector("#ticket-form");
 const ticketMessage = document.querySelector("#ticket-message");
 const ticketPriority = document.querySelector("#ticket-priority");
+const ticketRequester = document.querySelector("#ticket-requester");
 const ticketOutput = document.querySelector("#ticket-output");
 const ticketList = document.querySelector("#ticket-list");
+const ticketPanelTitle = document.querySelector("#ticket-panel-title");
+const ticketPanelMode = document.querySelector("#ticket-panel-mode");
+const ticketPanelCopy = document.querySelector("#ticket-panel-copy");
 const documentForm = document.querySelector("#document-form");
 const documentTitle = document.querySelector("#document-title");
 const documentContent = document.querySelector("#document-content");
@@ -67,6 +71,18 @@ function authHeaders() {
   return authToken ? { Authorization: `Bearer ${authToken}` } : {};
 }
 
+function isAdmin() {
+  return currentUser?.role === "admin";
+}
+
+function isSupport() {
+  return currentUser?.role === "support";
+}
+
+function canManageTickets() {
+  return isAdmin() || isSupport();
+}
+
 function createElement(tag, className, text) {
   const element = document.createElement(tag);
   if (className) element.className = className;
@@ -77,10 +93,12 @@ function createElement(tag, className, text) {
 function setAuthMode(mode) {
   authMode = mode;
   authTabs.forEach((tab) => tab.classList.toggle("active", tab.dataset.authMode === mode));
-  authSubmit.textContent = mode === "admin" ? "Admin Girişi" : "Giriş Yap";
+  authSubmit.textContent = mode === "admin" ? "Admin Girişi" : mode === "support" ? "Destek Girişi" : "Giriş Yap";
   authMessage.textContent = "";
   if (mode === "admin") {
     authUsername.value = authUsername.value || "admin";
+  } else if (mode === "support") {
+    authUsername.value = authUsername.value || "support";
   }
 }
 
@@ -101,6 +119,13 @@ async function submitAuth(event) {
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.detail || "Giriş başarısız");
+
+    if (authMode === "admin" && data.user.role !== "admin") {
+      throw new Error("Bu giriş alanı yalnızca admin hesapları içindir.");
+    }
+    if (authMode === "support" && data.user.role !== "support") {
+      throw new Error("Bu giriş alanı yalnızca destek uzmanı hesapları içindir.");
+    }
 
     authToken = data.token;
     currentUser = data.user;
@@ -139,23 +164,65 @@ async function enterApp() {
   appShell.classList.remove("hidden");
   const display = currentUser.display_name || currentUser.username;
   accountName.textContent = `${display} · ${roleLabels[currentUser.role] || currentUser.role}`;
-  selectedRole = currentUser.role === "admin" ? "admin" : selectedRole;
+  if (isAdmin()) {
+    selectedRole = "admin";
+  } else if (isSupport()) {
+    selectedRole = "support";
+  } else if (selectedRole === "admin" || selectedRole === "support") {
+    selectedRole = currentUser.role || "employee";
+  }
   setActiveRole(selectedRole);
   applyModeVisibility();
-  await Promise.all([checkHealth(), loadTopics()]);
-  if (currentUser.role === "admin") {
+  await Promise.all([checkHealth(), loadTopics(), loadTickets()]);
+  if (isAdmin()) {
     await Promise.all([loadOverview(), loadAudit(), loadUsers(), loadTickets(), loadDocuments(), loadIntegrations()]);
   }
   await loadConversationHistory();
   if (!messages.children.length) {
-    addMessage("Merhaba, ben Kayra. Kayıtlı oturumla sohbet geçmişini tutabilir, kaynaklı cevap ve aksiyon planı hazırlayabilirim.", "assistant");
+    addMessage("Merhaba, ben Kayra. Kurumsal bilgi tabanından kaynaklı cevap hazırlayabilir, gerektiğinde destek talebi açıp süreci takip edebilirim.", "assistant");
   }
 }
 
 function applyModeVisibility() {
-  const isAdmin = currentUser?.role === "admin";
-  controlPanel.classList.toggle("hidden", !isAdmin);
-  appShell.classList.toggle("user-mode", !isAdmin);
+  const adminMode = isAdmin();
+  const supportMode = isSupport();
+  controlPanel.classList.remove("hidden");
+  appShell.classList.toggle("admin-mode", adminMode);
+  appShell.classList.toggle("support-mode", supportMode);
+  appShell.classList.toggle("user-mode", !adminMode && !supportMode);
+  document.querySelectorAll(".admin-only").forEach((element) => element.classList.toggle("hidden", !adminMode));
+  roleButtons.forEach((button) => {
+    const role = button.dataset.role;
+    const hidden =
+      (adminMode && role !== "admin") ||
+      (supportMode && role !== "support") ||
+      (!adminMode && !supportMode && ["admin", "support"].includes(role));
+    button.classList.toggle("hidden", hidden);
+    button.disabled = supportMode && role !== "support";
+  });
+  configureTicketPanel();
+}
+
+function configureTicketPanel() {
+  if (!currentUser) return;
+  ticketRequester.classList.toggle("hidden", !canManageTickets());
+  ticketRequester.value = canManageTickets() ? ticketRequester.value : "";
+  if (isAdmin()) {
+    ticketPanelTitle.textContent = "Operasyon Talepleri";
+    ticketPanelMode.textContent = "Admin görünümü";
+    ticketPanelCopy.textContent = "Tüm talepleri, öncelikleri ve destek atamalarını buradan izleyebilirsiniz.";
+    ticketMessage.placeholder = "Talep metni veya kullanıcıdan gelen destek notu";
+  } else if (isSupport()) {
+    ticketPanelTitle.textContent = "Destek Uzmanı Kuyruğu";
+    ticketPanelMode.textContent = "Sadece ticket";
+    ticketPanelCopy.textContent = "Açık talepleri alın, işlem durumunu güncelleyin ve çözülen kayıtları kapatın.";
+    ticketMessage.placeholder = "Kullanıcı adına yeni talep açmak için talep metni";
+  } else {
+    ticketPanelTitle.textContent = "Taleplerim";
+    ticketPanelMode.textContent = "Kullanıcı";
+    ticketPanelCopy.textContent = "Yeni destek talebi açabilir ve kendi taleplerinizin durumunu takip edebilirsiniz.";
+    ticketMessage.placeholder = "Destek talebinizi kısa ve net yazın";
+  }
 }
 
 function logout() {
@@ -230,7 +297,7 @@ function addFeedback(message) {
     button.addEventListener("click", async () => {
       await sendFeedback(message, item.rating);
       row.replaceChildren(document.createTextNode("Geri bildirim alındı"));
-      if (currentUser?.role === "admin") {
+      if (isAdmin()) {
         loadOverview();
         loadAudit();
       }
@@ -282,9 +349,12 @@ async function submitMessage(message) {
     addSources(data.sources || []);
     addActions(data.next_actions || [], data.follow_up_suggestions || []);
     addFeedback(text);
-    if (currentUser?.role === "admin") {
+    if (isAdmin()) {
       loadOverview();
       loadAudit();
+    }
+    if (canManageTickets()) {
+      loadTickets();
     }
   } catch (error) {
     addMessage(error.message || "Teknik bir sorun oluştu. Biraz sonra tekrar deneyebilirsiniz.", "assistant");
@@ -327,7 +397,7 @@ async function checkHealth() {
     const data = await response.json();
     healthStatus.textContent = "Çevrimiçi";
     knowledgeCount.textContent = `${data.indexed_chunks} parça`;
-    connectionCopy.textContent = currentUser?.role === "admin" ? "Admin mod" : "Kullanıcı mod";
+    connectionCopy.textContent = isAdmin() ? "Admin mod" : isSupport() ? "Destek modu" : "Kullanıcı mod";
   } catch (error) {
     healthStatus.textContent = "Bağlantı yok";
     knowledgeCount.textContent = "-";
@@ -543,40 +613,60 @@ async function loadConversationHistory() {
 }
 
 async function loadTickets() {
-  const response = await fetch("/api/admin/tickets", { headers: authHeaders() });
+  const endpoint = isAdmin() ? "/api/admin/tickets" : isSupport() ? "/api/support/tickets" : "/api/tickets/me";
+  const response = await fetch(endpoint, { headers: authHeaders() });
   if (!response.ok) return;
   const data = await response.json();
   ticketList.replaceChildren();
 
   if (!data.tickets.length) {
-    ticketList.appendChild(createElement("p", "empty-state", "Henüz ticket yok."));
+    const copy = isSupport() ? "Açık destek kuyruğunda talep yok." : "Henüz ticket yok.";
+    ticketList.appendChild(createElement("p", "empty-state", copy));
     return;
   }
 
-  data.tickets.slice(0, 8).forEach((ticket) => {
+  data.tickets.slice(0, 12).forEach((ticket) => {
     const row = createElement("div", "ticket-item");
     const info = createElement("div", "ticket-info");
     info.appendChild(createElement("strong", null, `${ticket.id} · ${ticket.title}`));
-    info.appendChild(createElement("span", null, `${ticket.category} · ${ticket.priority} · ${ticket.status}`));
+    info.appendChild(createElement("span", null, `${ticket.category} · ${ticket.priority} · ${ticket.status} · ${ticket.requester}`));
     const actions = createElement("div", "inline-actions");
-    ["open", "in_progress", "resolved"].forEach((status) => {
-      const button = createElement("button", null, status);
-      button.type = "button";
-      button.addEventListener("click", () => updateTicketStatus(ticket.id, status));
-      actions.appendChild(button);
-    });
+    if (canManageTickets()) {
+      [
+        ["open", "Açık"],
+        ["in_progress", "İşlemde"],
+        ["resolved", "Çözüldü"],
+      ].forEach(([status, label]) => {
+        const button = createElement("button", null, label);
+        button.type = "button";
+        button.addEventListener("click", () => updateTicketStatus(ticket.id, status));
+        actions.appendChild(button);
+      });
+    } else {
+      const ask = createElement("button", null, "Sohbete taşı");
+      ask.type = "button";
+      ask.addEventListener("click", () => submitMessage(`${ticket.id} talebimin durumu nedir? Özet: ${ticket.summary}`));
+      actions.appendChild(ask);
+    }
     row.append(info, actions);
     ticketList.appendChild(row);
   });
 }
 
 async function updateTicketStatus(ticketId, status) {
-  await fetch(`/api/admin/tickets/${encodeURIComponent(ticketId)}`, {
+  const endpoint = isAdmin() ? `/api/admin/tickets/${encodeURIComponent(ticketId)}` : `/api/support/tickets/${encodeURIComponent(ticketId)}`;
+  const payload = { status };
+  if (isSupport() && status === "in_progress") {
+    payload.assignee = currentUser.username;
+  }
+  await fetch(endpoint, {
     method: "PATCH",
     headers: { "Content-Type": "application/json", ...authHeaders() },
-    body: JSON.stringify({ status }),
+    body: JSON.stringify(payload),
   });
-  await Promise.all([loadTickets(), loadAudit(), loadOverview()]);
+  const refreshes = [loadTickets()];
+  if (isAdmin()) refreshes.push(loadAudit(), loadOverview());
+  await Promise.all(refreshes);
 }
 
 async function createTicketDraft(event) {
@@ -587,15 +677,26 @@ async function createTicketDraft(event) {
   const response = await fetch("/api/tickets", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeaders() },
-    body: JSON.stringify({ message, priority: ticketPriority.value }),
+    body: JSON.stringify({
+      message,
+      priority: ticketPriority.value,
+      requester: canManageTickets() ? ticketRequester.value.trim() || null : null,
+    }),
   });
   const ticket = await response.json();
+  if (!response.ok) {
+    ticketOutput.textContent = ticket.detail || "Ticket açılamadı.";
+    return;
+  }
   ticketOutput.replaceChildren();
   ticketOutput.appendChild(createElement("strong", null, `${ticket.id} açıldı`));
   ticketOutput.appendChild(createElement("p", null, `${ticket.category} · ${ticket.priority} · ${ticket.status}`));
   ticketOutput.appendChild(createElement("span", "mini-line", ticket.summary));
   ticketMessage.value = "";
-  await Promise.all([loadTickets(), loadOverview(), loadAudit()]);
+  ticketRequester.value = canManageTickets() ? ticketRequester.value : "";
+  const refreshes = [loadTickets()];
+  if (isAdmin()) refreshes.push(loadOverview(), loadAudit());
+  await Promise.all(refreshes);
 }
 
 async function addKnowledgeDocument(event) {
@@ -689,12 +790,14 @@ clearButton.addEventListener("click", () => {
   addMessage("Yeni oturum açıldı. Hangi kurumsal akışı ele alalım?", "assistant");
 });
 refreshOverview.addEventListener("click", () => {
-  loadOverview();
-  loadAudit();
-  loadUsers();
   loadTickets();
-  loadDocuments();
-  loadIntegrations();
+  if (isAdmin()) {
+    loadOverview();
+    loadAudit();
+    loadUsers();
+    loadDocuments();
+    loadIntegrations();
+  }
 });
 ticketForm.addEventListener("submit", createTicketDraft);
 documentForm.addEventListener("submit", addKnowledgeDocument);

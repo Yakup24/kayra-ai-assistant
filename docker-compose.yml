@@ -8,6 +8,8 @@ services:
       KNOWLEDGE_DIR: "data/knowledge"
       LOG_DIR: "runtime"
       MIN_CONFIDENCE: "0.22"
+      SUPPORT_USERNAME: "support"
+      SUPPORT_PASSWORD: "KayraSupport2026!"
     volumes:
       - ./data:/app/data
       - ./runtime:/app/runtime

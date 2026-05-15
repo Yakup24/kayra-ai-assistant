@@ -19,6 +19,7 @@
 
         <div class="auth-tabs" role="group" aria-label="Giriş tipi">
           <button class="auth-tab active" type="button" data-auth-mode="login">Kullanıcı</button>
+          <button class="auth-tab" type="button" data-auth-mode="support">Destek Uzmanı</button>
           <button class="auth-tab" type="button" data-auth-mode="admin">Admin</button>
         </div>
 
@@ -65,6 +66,7 @@
             <button class="role-button" type="button" data-role="it">IT</button>
             <button class="role-button" type="button" data-role="hr">İK</button>
             <button class="role-button" type="button" data-role="support">Destek</button>
+            <button class="role-button" type="button" data-role="admin">Admin</button>
           </div>
         </section>
 
@@ -125,7 +127,7 @@
       </section>
 
       <aside class="control-panel" aria-label="Enterprise control center">
-        <section class="control-section product-section">
+        <section class="control-section product-section admin-only">
           <div>
             <span class="eyebrow">Control Center</span>
             <h2 id="product-name">Kayra Enterprise</h2>
@@ -134,7 +136,7 @@
           <strong id="product-maturity" class="maturity">v0.2</strong>
         </section>
 
-        <section class="control-section">
+        <section class="control-section admin-only">
           <div class="section-head">
             <h3>Metrikler</h3>
             <button id="refresh-overview" class="ghost-button" type="button">Yenile</button>
@@ -142,7 +144,7 @@
           <div id="metrics-grid" class="metrics-grid"></div>
         </section>
 
-        <section class="control-section split-lists">
+        <section class="control-section split-lists admin-only">
           <div>
             <h3>Yetenekler</h3>
             <div id="capability-list" class="stack-list"></div>
@@ -153,12 +155,12 @@
           </div>
         </section>
 
-        <section class="control-section">
+        <section class="control-section admin-only">
           <h3>Güvenlik</h3>
           <div id="security-list" class="security-list"></div>
         </section>
 
-        <section class="control-section tool-section">
+        <section class="control-section tool-section admin-only">
           <h3>Kullanıcı Yönetimi</h3>
           <form id="user-form" class="tool-form">
             <input id="new-user-display" type="text" placeholder="Ad Soyad" />
@@ -178,9 +180,14 @@
           <div id="user-list" class="user-list"></div>
         </section>
 
-        <section class="control-section tool-section">
-          <h3>Ticket Studio</h3>
+        <section class="control-section tool-section ticket-workspace">
+          <div class="section-head">
+            <h3 id="ticket-panel-title">Talep Merkezi</h3>
+            <span id="ticket-panel-mode" class="status-pill">Hazır</span>
+          </div>
+          <p id="ticket-panel-copy" class="panel-copy">Kurumsal destek taleplerini buradan açıp takip edebilirsiniz.</p>
           <form id="ticket-form" class="tool-form">
+            <input id="ticket-requester" type="text" placeholder="Talep sahibi kullanıcı adı" />
             <textarea id="ticket-message" rows="3" placeholder="Talep metni"></textarea>
             <select id="ticket-priority" aria-label="Öncelik">
               <option value="normal">Normal</option>
@@ -193,7 +200,7 @@
           <div id="ticket-list" class="ticket-list"></div>
         </section>
 
-        <section class="control-section tool-section">
+        <section class="control-section tool-section admin-only">
           <h3>Bilgi Tabanı</h3>
           <form id="document-form" class="tool-form">
             <input id="document-title" type="text" placeholder="Doküman başlığı" />
@@ -204,7 +211,7 @@
           <div id="document-list" class="document-list"></div>
         </section>
 
-        <section class="control-section">
+        <section class="control-section admin-only">
           <h3>Audit Akışı</h3>
           <div id="audit-list" class="audit-list"></div>
         </section>

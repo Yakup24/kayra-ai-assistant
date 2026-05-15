@@ -23,12 +23,22 @@ def _b64decode(data: str) -> bytes:
 
 
 class AuthService:
-    def __init__(self, database_path: Path, secret: str, admin_username: str, admin_password: str) -> None:
+    def __init__(
+        self,
+        database_path: Path,
+        secret: str,
+        admin_username: str,
+        admin_password: str,
+        support_username: str | None = None,
+        support_password: str | None = None,
+    ) -> None:
         self.database_path = database_path
         self.secret = secret.encode("utf-8")
         self.database_path.parent.mkdir(parents=True, exist_ok=True)
         self._init_db()
         self._ensure_admin(admin_username, admin_password)
+        if support_username and support_password:
+            self._ensure_support(support_username, support_password)
 
     def create_user(
         self,
@@ -157,6 +167,18 @@ class AuthService:
             email=None,
             display_name="Kayra Admin",
             role="admin",
+        )
+
+    def _ensure_support(self, support_username: str, support_password: str) -> None:
+        normalized_support = support_username.strip().lower()
+        if self._find_user(normalized_support, include_inactive=True):
+            return
+        self.create_user(
+            username=normalized_support,
+            password=support_password,
+            email="kayra.destek@kayra.com",
+            display_name="Kayra Destek Uzmanı",
+            role="support",
         )
 
     def _find_user(self, username: str, include_inactive: bool = False) -> dict | None:

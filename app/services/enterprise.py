@@ -37,7 +37,7 @@ CAPABILITIES = [
     ),
     Capability(
         title="RBAC uyumlu rol bağlamı",
-        description="Genel, çalışan, IT, İK ve destek rolleriyle yanıt tonunu ve aksiyonları değiştirir.",
+        description="Admin, destek uzmanı ve çalışan rollerini ayrı yetki alanlarıyla yönetir.",
         status="Aktif",
     ),
 ]
@@ -117,7 +117,7 @@ class EnterpriseService:
         return EnterpriseOverviewResponse(
             product_name="Kayra Enterprise Assistant",
             tagline="Türkçe kurumsal destek, RAG, audit ve entegrasyon odaklı AI asistan platformu.",
-            maturity="Enterprise Prototype v0.2",
+            maturity="Enterprise Prototype v0.3",
             metrics=metrics,
             capabilities=CAPABILITIES,
             integrations=INTEGRATIONS,
