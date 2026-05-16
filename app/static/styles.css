@@ -163,6 +163,10 @@ button {
   grid-template-columns: 286px minmax(460px, 1fr) 360px;
 }
 
+.app-shell.support-mode {
+  grid-template-columns: 270px minmax(520px, 1fr) minmax(520px, 560px);
+}
+
 .nav-panel,
 .chat-panel,
 .control-panel {
@@ -807,6 +811,174 @@ select:focus {
   margin-top: 5px;
 }
 
+.support-workbench {
+  margin-top: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.support-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.support-stat,
+.support-detail,
+.support-events {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+
+.support-stat {
+  min-height: 64px;
+  padding: 10px;
+  display: grid;
+  gap: 2px;
+  align-content: center;
+}
+
+.support-stat span {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.support-stat strong {
+  font-size: 1.3rem;
+}
+
+.support-detail {
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.support-detail h4,
+.support-events h4 {
+  margin: 0;
+  font-size: 0.98rem;
+}
+
+.support-detail p,
+.support-events p {
+  margin: 0;
+}
+
+.support-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.detail-field {
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: white;
+}
+
+.detail-field span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.detail-field strong {
+  display: block;
+  margin-top: 3px;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 0.8rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.support-summary,
+.support-resolution-read {
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: white;
+  color: var(--ink);
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.support-resolution-read {
+  color: var(--accent-deep);
+  background: #f3fbf9;
+  border-color: #cbe7e2;
+}
+
+#support-resolution-note {
+  width: 100%;
+  min-height: 104px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  resize: vertical;
+  background: white;
+  color: var(--ink);
+}
+
+.support-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.support-actions button {
+  min-height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: white;
+  color: var(--ink);
+  font-weight: 800;
+}
+
+.support-actions .primary-action {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: white;
+}
+
+.support-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.support-events {
+  padding: 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.support-event {
+  padding: 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: white;
+}
+
+.support-event strong,
+.support-event span {
+  display: block;
+}
+
+.support-event strong {
+  font-size: 0.78rem;
+}
+
+.support-event span,
+.support-event p {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.74rem;
+  line-height: 1.35;
+}
+
 .user-list,
 .ticket-list,
 .document-list {
@@ -826,6 +998,24 @@ select:focus {
   border-radius: 8px;
   background: var(--surface-soft);
   padding: 10px;
+}
+
+.ticket-item.support-ticket {
+  cursor: pointer;
+  transition: border-color 140ms ease, background 140ms ease, box-shadow 140ms ease;
+}
+
+.ticket-item.support-ticket:hover,
+.ticket-item.support-ticket:focus-visible {
+  border-color: #a9c9c3;
+  background: #f9fcfb;
+  outline: none;
+}
+
+.ticket-item.selected {
+  border-color: var(--accent);
+  background: #f2fbf9;
+  box-shadow: inset 3px 0 0 var(--accent);
 }
 
 .user-info,
@@ -934,7 +1124,9 @@ select:focus {
 }
 
 @media (max-width: 1240px) {
-  .app-shell {
+  .app-shell,
+  .app-shell.user-mode,
+  .app-shell.support-mode {
     grid-template-columns: 270px minmax(420px, 1fr);
     height: auto;
   }
@@ -951,7 +1143,9 @@ select:focus {
 }
 
 @media (max-width: 840px) {
-  .app-shell {
+  .app-shell,
+  .app-shell.user-mode,
+  .app-shell.support-mode {
     width: 100%;
     min-height: 100vh;
     margin: 0;
@@ -989,7 +1183,10 @@ select:focus {
   }
 
   .composer,
-  .metrics-grid {
+  .metrics-grid,
+  .support-stats,
+  .support-detail-grid,
+  .support-actions {
     grid-template-columns: 1fr;
   }
 }

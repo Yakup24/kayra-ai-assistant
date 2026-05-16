@@ -33,6 +33,10 @@ const ticketList = document.querySelector("#ticket-list");
 const ticketPanelTitle = document.querySelector("#ticket-panel-title");
 const ticketPanelMode = document.querySelector("#ticket-panel-mode");
 const ticketPanelCopy = document.querySelector("#ticket-panel-copy");
+const supportWorkbench = document.querySelector("#support-workbench");
+const supportStats = document.querySelector("#support-stats");
+const supportDetail = document.querySelector("#support-detail");
+const supportEvents = document.querySelector("#support-events");
 const documentForm = document.querySelector("#document-form");
 const documentTitle = document.querySelector("#document-title");
 const documentContent = document.querySelector("#document-content");
@@ -76,6 +80,8 @@ let refreshToken = localStorage.getItem("kayra_refresh_token") || "";
 let currentUser = null;
 let sessionId = localStorage.getItem("kayra_session_id") || crypto.randomUUID();
 let selectedRole = localStorage.getItem("kayra_role") || "general";
+let ticketsCache = [];
+let selectedTicketId = "";
 
 localStorage.setItem("kayra_session_id", sessionId);
 sessionLabel.textContent = sessionId.slice(0, 8);
@@ -266,6 +272,8 @@ function applyModeVisibility() {
 
 function configureTicketPanel() {
   if (!currentUser) return;
+  supportWorkbench.classList.toggle("hidden", !isSupport());
+  ticketForm.classList.toggle("hidden", isSupport());
   ticketRequester.classList.toggle("hidden", !canManageTickets());
   ticketRequester.value = canManageTickets() ? ticketRequester.value : "";
   if (isAdmin()) {
@@ -275,8 +283,8 @@ function configureTicketPanel() {
     ticketMessage.placeholder = "Talep metni veya çalışandan gelen destek notu";
   } else if (isSupport()) {
     ticketPanelTitle.textContent = "Destek Uzmanı Kuyruğu";
-    ticketPanelMode.textContent = "Çözüm ekranı";
-    ticketPanelCopy.textContent = "Çalışanlardan gelen sorunları alın, işlem durumuna taşıyın ve çözüm notuyla kapatın.";
+    ticketPanelMode.textContent = "Operasyon ekranı";
+    ticketPanelCopy.textContent = "Çalışan taleplerini seçin, üzerinize alın, çözüm notunu yazın ve SLA puanıyla kapatın.";
     ticketMessage.placeholder = "Çalışan adına yeni sorun/talep açmak için metin";
   } else {
     ticketPanelTitle.textContent = "Çalışan Taleplerim";
@@ -292,6 +300,8 @@ function logout() {
   authToken = "";
   refreshToken = "";
   currentUser = null;
+  selectedTicketId = "";
+  ticketsCache = [];
   messages.replaceChildren();
   showAuth();
 }
@@ -686,16 +696,40 @@ async function loadTickets() {
     ticketOutput.textContent = error.message || "Ticket listesi alınamadı.";
     return;
   }
+  ticketsCache = data.tickets;
   ticketList.replaceChildren();
+  if (isSupport()) {
+    renderSupportWorkbench(ticketsCache);
+  }
 
   if (!data.tickets.length) {
     const copy = isSupport() ? "Açık destek kuyruğunda talep yok." : "Henüz ticket yok.";
     ticketList.appendChild(createElement("p", "empty-state", copy));
+    if (isSupport()) {
+      renderSupportEmpty();
+    }
     return;
   }
 
+  if (isSupport() && !ticketsCache.some((ticket) => ticket.id === selectedTicketId)) {
+    const nextTicket = ticketsCache.find((ticket) => ticket.status !== "resolved") || ticketsCache[0];
+    selectedTicketId = nextTicket?.id || "";
+    renderSupportWorkbench(ticketsCache);
+  }
+
   data.tickets.slice(0, 12).forEach((ticket) => {
-    const row = createElement("div", "ticket-item");
+    const row = createElement("div", `ticket-item ${isSupport() ? "support-ticket" : ""} ${isSupport() && ticket.id === selectedTicketId ? "selected" : ""}`);
+    row.tabIndex = isSupport() ? 0 : -1;
+    row.dataset.ticketId = ticket.id;
+    if (isSupport()) {
+      row.addEventListener("click", () => selectTicket(ticket.id));
+      row.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          selectTicket(ticket.id);
+        }
+      });
+    }
     const info = createElement("div", "ticket-info");
     info.appendChild(createElement("strong", null, `${ticket.id} · ${ticket.title}`));
     info.appendChild(createElement("span", null, `${ticket.category} · ${ticket.priority} · ${ticketStatusLabels[ticket.status] || ticket.status} · Çalışan: ${ticket.requester}`));
@@ -720,24 +754,26 @@ async function loadTickets() {
     if (canManageTickets()) {
       const actionSet = [];
       if (ticket.status === "open") {
-        actionSet.push(["in_progress", "İşleme al"]);
+        actionSet.push(["in_progress", "Üzerime al"]);
       } else if (ticket.status === "in_progress") {
-        actionSet.push(["in_progress", ticket.assignee === currentUser.username ? "Üzerimde" : "Devral"]);
+        actionSet.push(["in_progress", ticket.assignee === currentUser.username ? "Detayı aç" : "Devral"]);
       }
       if (ticket.status !== "resolved") {
-        actionSet.push(["resolved", "Çöz"]);
+        actionSet.push(["resolved", isSupport() ? "Çözüm yaz" : "Çöz"]);
       } else {
         actionSet.push(["reopen", "Yeniden aç"]);
       }
       actionSet.forEach(([status, label]) => {
         const button = createElement("button", null, label);
         button.type = "button";
-        if (status === "in_progress" && ticket.status === "in_progress" && ticket.assignee === currentUser.username) {
-          button.disabled = true;
-        }
-        button.addEventListener("click", () => {
+        button.addEventListener("click", (event) => {
+          event.stopPropagation();
           if (status === "reopen") {
             reopenTicket(ticket.id, button);
+          } else if (isSupport() && status === "resolved") {
+            selectTicket(ticket.id, { focusResolution: true });
+          } else if (isSupport() && status === "in_progress" && ticket.status === "in_progress" && ticket.assignee === currentUser.username) {
+            selectTicket(ticket.id);
           } else {
             updateTicketStatus(ticket.id, status, button);
           }
@@ -747,12 +783,18 @@ async function loadTickets() {
     } else {
       const ask = createElement("button", null, "Sohbete taşı");
       ask.type = "button";
-      ask.addEventListener("click", () => submitMessage(`${ticket.id} talebimin durumu nedir? Özet: ${ticket.summary}`));
+      ask.addEventListener("click", (event) => {
+        event.stopPropagation();
+        submitMessage(`${ticket.id} talebimin durumu nedir? Özet: ${ticket.summary}`);
+      });
       actions.appendChild(ask);
       if (ticket.status === "resolved") {
         const reopen = createElement("button", null, "Yeniden aç");
         reopen.type = "button";
-        reopen.addEventListener("click", () => reopenTicket(ticket.id, reopen));
+        reopen.addEventListener("click", (event) => {
+          event.stopPropagation();
+          reopenTicket(ticket.id, reopen);
+        });
         actions.appendChild(reopen);
       }
     }
@@ -761,8 +803,141 @@ async function loadTickets() {
   });
 }
 
-async function reopenTicket(ticketId, button = null) {
-  const reason = prompt("Ticket neden yeniden açılsın?", "Sorun devam ediyor.");
+function renderSupportEmpty() {
+  supportStats.replaceChildren();
+  supportDetail.replaceChildren();
+  supportEvents.replaceChildren();
+  supportDetail.appendChild(createElement("span", "eyebrow", "Destek Kuyruğu"));
+  supportDetail.appendChild(createElement("h4", null, "Aktif talep yok"));
+  supportDetail.appendChild(createElement("p", null, "Çalışanlar yeni ticket açtığında bu alanda detay, SLA ve çözüm aksiyonları görünecek."));
+}
+
+function renderSupportWorkbench(tickets) {
+  if (!isSupport()) return;
+  const openCount = tickets.filter((ticket) => ticket.status === "open").length;
+  const activeCount = tickets.filter((ticket) => ticket.status === "in_progress").length;
+  const breachedCount = tickets.filter((ticket) => ticket.sla_status === "breached").length;
+  supportStats.replaceChildren(
+    supportStat("Açık", openCount),
+    supportStat("İşlemde", activeCount),
+    supportStat("SLA aşan", breachedCount)
+  );
+  const selected = tickets.find((ticket) => ticket.id === selectedTicketId);
+  if (selected) {
+    renderSupportDetail(selected);
+    loadTicketEvents(selected.id);
+  } else {
+    renderSupportEmpty();
+  }
+}
+
+function supportStat(label, value) {
+  const item = createElement("div", "support-stat");
+  item.appendChild(createElement("span", null, label));
+  item.appendChild(createElement("strong", null, String(value)));
+  return item;
+}
+
+function selectTicket(ticketId, options = {}) {
+  selectedTicketId = ticketId;
+  const selected = ticketsCache.find((ticket) => ticket.id === ticketId);
+  if (selected) {
+    renderSupportDetail(selected);
+    loadTicketEvents(ticketId);
+  }
+  ticketList.querySelectorAll(".ticket-item").forEach((item) => {
+    item.classList.toggle("selected", item.dataset.ticketId === ticketId);
+  });
+  if (options.focusResolution) {
+    setTimeout(() => document.querySelector("#support-resolution-note")?.focus(), 0);
+  }
+}
+
+function renderSupportDetail(ticket) {
+  supportDetail.replaceChildren();
+  supportDetail.appendChild(createElement("span", "eyebrow", "Seçili Talep"));
+  supportDetail.appendChild(createElement("h4", null, `${ticket.id} · ${ticket.title}`));
+
+  const meta = createElement("div", "support-detail-grid");
+  meta.appendChild(detailField("Çalışan", ticket.requester));
+  meta.appendChild(detailField("Durum", ticketStatusLabels[ticket.status] || ticket.status));
+  meta.appendChild(detailField("Öncelik", ticket.priority));
+  meta.appendChild(detailField("Atanan", ticket.assignee || "Henüz yok"));
+  meta.appendChild(detailField("SLA", `${slaStatusLabels[ticket.sla_status] || ticket.sla_status} · ${formatDateTime(ticket.sla_due_at)}`));
+  meta.appendChild(detailField("Süre", formatDuration(ticket.sla_minutes)));
+  supportDetail.appendChild(meta);
+
+  supportDetail.appendChild(createElement("p", "support-summary", ticket.summary));
+
+  if (ticket.resolution_note) {
+    supportDetail.appendChild(createElement("p", "support-resolution-read", `Son çözüm notu: ${ticket.resolution_note}`));
+  }
+
+  const note = document.createElement("textarea");
+  note.id = "support-resolution-note";
+  note.rows = 4;
+  note.placeholder = ticket.status === "resolved" ? "Yeniden açma gerekçesi yazın" : "Çözüm notu: yapılan işlem, kullanıcıya iletilen adımlar, doğrulama sonucu";
+  note.value = ticket.status === "resolved" ? "Sorun devam ediyor." : "";
+  supportDetail.appendChild(note);
+
+  const actions = createElement("div", "support-actions");
+  if (ticket.status !== "resolved") {
+    const claim = createElement("button", null, ticket.assignee === currentUser.username ? "Üzerimde" : "Talebi üzerime al");
+    claim.type = "button";
+    claim.disabled = ticket.status === "in_progress" && ticket.assignee === currentUser.username;
+    claim.addEventListener("click", () => updateTicketStatus(ticket.id, "in_progress", claim));
+    actions.appendChild(claim);
+
+    const resolve = createElement("button", "primary-action", "Çözüm notuyla kapat");
+    resolve.type = "button";
+    resolve.addEventListener("click", () => {
+      const resolutionNote = note.value.trim();
+      updateTicketStatus(ticket.id, "resolved", resolve, { resolutionNote });
+    });
+    actions.appendChild(resolve);
+  } else {
+    const reopen = createElement("button", "primary-action", "Yeniden aç");
+    reopen.type = "button";
+    reopen.addEventListener("click", () => reopenTicket(ticket.id, reopen, note.value.trim()));
+    actions.appendChild(reopen);
+  }
+  supportDetail.appendChild(actions);
+}
+
+function detailField(label, value) {
+  const item = createElement("div", "detail-field");
+  item.appendChild(createElement("span", null, label));
+  item.appendChild(createElement("strong", null, value || "-"));
+  return item;
+}
+
+async function loadTicketEvents(ticketId) {
+  if (!isSupport()) return;
+  supportEvents.replaceChildren(createElement("p", "empty-state", "İşlem geçmişi yükleniyor."));
+  try {
+    const response = await fetch(`/api/support/tickets/${encodeURIComponent(ticketId)}/events`, { headers: authHeaders() });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || "İşlem geçmişi alınamadı.");
+    supportEvents.replaceChildren();
+    supportEvents.appendChild(createElement("h4", null, "İşlem Geçmişi"));
+    if (!data.events.length) {
+      supportEvents.appendChild(createElement("p", "empty-state", "Bu ticket için henüz kayıt yok."));
+      return;
+    }
+    data.events.forEach((event) => {
+      const row = createElement("div", "support-event");
+      row.appendChild(createElement("strong", null, event.event_type));
+      row.appendChild(createElement("span", null, `${event.actor} · ${formatDateTime(event.created_at)}`));
+      if (event.note) row.appendChild(createElement("p", null, event.note));
+      supportEvents.appendChild(row);
+    });
+  } catch (error) {
+    supportEvents.replaceChildren(createElement("p", "empty-state", error.message || "İşlem geçmişi alınamadı."));
+  }
+}
+
+async function reopenTicket(ticketId, button = null, presetReason = "") {
+  const reason = presetReason || (isSupport() ? document.querySelector("#support-resolution-note")?.value.trim() : prompt("Ticket neden yeniden açılsın?", "Sorun devam ediyor."));
   if (!reason) return;
   const originalLabel = button?.textContent;
   if (button) {
@@ -777,6 +952,7 @@ async function reopenTicket(ticketId, button = null) {
     });
     const updated = await response.json();
     if (!response.ok) throw new Error(updated.detail || "Ticket yeniden açılamadı.");
+    selectedTicketId = updated.id;
     ticketOutput.textContent = `${updated.id} yeniden açıldı.`;
     await loadTickets();
   } catch (error) {
@@ -788,16 +964,22 @@ async function reopenTicket(ticketId, button = null) {
   }
 }
 
-async function updateTicketStatus(ticketId, status, button = null) {
+async function updateTicketStatus(ticketId, status, button = null, options = {}) {
   const endpoint = isAdmin() ? `/api/admin/tickets/${encodeURIComponent(ticketId)}` : `/api/support/tickets/${encodeURIComponent(ticketId)}`;
   const payload = { status };
   if (isSupport() && status === "in_progress") {
     payload.assignee = currentUser.username;
   }
-  const resolutionNote =
-    status === "resolved"
-      ? prompt("Çözüm notu yazın. Çalışan bu notu kendi talebinde görecek.", "Sorun incelendi ve çözüldü.")
-      : null;
+  let resolutionNote = options.resolutionNote || null;
+  if (status === "resolved" && !resolutionNote && isSupport()) {
+    selectedTicketId = ticketId;
+    selectTicket(ticketId, { focusResolution: true });
+    ticketOutput.textContent = "Kapatmadan önce destek çalışma masasına çözüm notu yaz.";
+    return;
+  }
+  if (status === "resolved" && !resolutionNote) {
+    resolutionNote = prompt("Çözüm notu yazın. Çalışan bu notu kendi talebinde görecek.", "Sorun incelendi ve çözüldü.");
+  }
   if (status === "resolved" && !resolutionNote) return;
   if (resolutionNote) {
     payload.resolution_note = resolutionNote;
@@ -816,6 +998,7 @@ async function updateTicketStatus(ticketId, status, button = null) {
     });
     const updated = await response.json();
     if (!response.ok) throw new Error(updated.detail || "Ticket güncellenemedi.");
+    selectedTicketId = updated.id;
 
     ticketOutput.replaceChildren();
     ticketOutput.appendChild(createElement("strong", null, `${updated.id} güncellendi`));
