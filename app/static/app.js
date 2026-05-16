@@ -742,10 +742,26 @@ async function loadTickets() {
       });
     }
     const info = createElement("div", "ticket-info");
-    info.appendChild(createElement("strong", null, `#${ticket.record_id} · ${ticket.id} · ${ticket.title}`));
-    info.appendChild(createElement("span", null, `${ticket.category} · ${ticket.priority} · ${ticketStatusLabels[ticket.status] || ticket.status}`));
-    info.appendChild(createElement("span", "ticket-meta", `Açan: ${ticket.requester_display_name || ticket.requester} (${ticket.requester})${ticket.requester_email ? ` · ${ticket.requester_email}` : ""}`));
-    info.appendChild(createElement("span", "ticket-meta", `Atanan: ${ticket.assignee_display_name || ticket.assignee || "Henüz yok"}`));
+    const header = createElement("div", "ticket-card-header");
+    const identity = createElement("div", "ticket-identity");
+    identity.appendChild(createElement("span", "ticket-number", `#${ticket.record_id}`));
+    identity.appendChild(createElement("strong", null, ticket.title));
+    identity.appendChild(createElement("small", null, ticket.id));
+    header.appendChild(identity);
+
+    const badges = createElement("div", "ticket-badges");
+    badges.appendChild(createElement("span", `ticket-chip status-${ticket.status}`, ticketStatusLabels[ticket.status] || ticket.status));
+    badges.appendChild(createElement("span", `ticket-chip priority-${ticket.priority}`, ticket.priority));
+    header.appendChild(badges);
+    info.appendChild(header);
+
+    const people = createElement("div", "ticket-people");
+    people.appendChild(createElement("span", null, `Açan: ${ticket.requester_display_name || ticket.requester}`));
+    people.appendChild(createElement("span", null, `Kullanıcı: ${ticket.requester}`));
+    if (ticket.requester_email) people.appendChild(createElement("span", null, ticket.requester_email));
+    people.appendChild(createElement("span", null, `Atanan: ${ticket.assignee_display_name || ticket.assignee || "Henüz yok"}`));
+    info.appendChild(people);
+
     info.appendChild(
       createElement(
         "span",

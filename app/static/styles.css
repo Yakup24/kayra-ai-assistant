@@ -1,18 +1,22 @@
 :root {
   color-scheme: light;
-  --bg: #eef2f6;
+  --bg: #e9eef3;
   --surface: #ffffff;
-  --surface-soft: #f7f9fb;
-  --ink: #111827;
-  --muted: #667085;
-  --line: #d8e0e8;
-  --accent: #0f766e;
-  --accent-deep: #0b4f4a;
+  --surface-soft: #f6f8fa;
+  --surface-strong: #f9fbfc;
+  --ink: #172033;
+  --muted: #657083;
+  --line: #d9e1ea;
+  --line-strong: #c4ceda;
+  --accent: #0d7f74;
+  --accent-deep: #07544d;
   --blue: #2563eb;
+  --sky: #0f6e99;
   --amber: #b45309;
   --red: #b42318;
   --violet: #6d28d9;
-  --shadow: 0 18px 40px rgba(15, 23, 42, 0.12);
+  --shadow: 0 18px 48px rgba(17, 32, 51, 0.12);
+  --shadow-soft: 0 10px 26px rgba(17, 32, 51, 0.08);
 }
 
 * {
@@ -25,7 +29,7 @@ body {
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   color: var(--ink);
   background:
-    linear-gradient(135deg, rgba(15, 118, 110, 0.08), rgba(37, 99, 235, 0.06)),
+    linear-gradient(135deg, rgba(13, 127, 116, 0.08), rgba(15, 110, 153, 0.06), rgba(180, 83, 9, 0.04)),
     var(--bg);
 }
 
@@ -1196,6 +1200,224 @@ select:focus {
 .empty-state {
   color: var(--muted);
   font-size: 0.84rem;
+}
+
+.auth-card,
+.nav-panel,
+.chat-panel,
+.control-panel {
+  border-color: rgba(196, 206, 218, 0.9);
+  background: rgba(255, 255, 255, 0.98);
+}
+
+.auth-card {
+  width: min(560px, 100%);
+  padding: 32px;
+}
+
+.brand-mark {
+  box-shadow: inset 0 -12px 24px rgba(13, 127, 116, 0.18);
+}
+
+.nav-panel {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(249, 251, 252, 0.96));
+}
+
+.chat-header,
+.composer-wrap {
+  background: rgba(255, 255, 255, 0.97);
+}
+
+.chat-header h2 {
+  color: #111827;
+}
+
+.messages {
+  background:
+    linear-gradient(180deg, rgba(249, 251, 252, 0.98), rgba(242, 246, 249, 0.98));
+}
+
+.message {
+  box-shadow: var(--shadow-soft);
+}
+
+.message.assistant {
+  border-color: #dce4ec;
+}
+
+.message.user {
+  box-shadow: 0 14px 26px rgba(13, 127, 116, 0.22);
+}
+
+.control-section {
+  padding-top: 16px;
+}
+
+.metric-card,
+.stack-item,
+.security-item,
+.audit-item,
+.tool-output,
+.support-stat,
+.support-detail,
+.support-events,
+.ticket-item,
+.user-item,
+.document-item,
+.ticket-detail-card {
+  box-shadow: var(--shadow-soft);
+}
+
+.ticket-workspace {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.ticket-workspace > .section-head {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: linear-gradient(180deg, #ffffff, var(--surface-strong));
+}
+
+.ticket-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.ticket-identity {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.ticket-number {
+  width: fit-content;
+  border: 1px solid #c9d7e4;
+  border-radius: 999px;
+  background: white;
+  color: var(--sky);
+  padding: 3px 8px;
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.ticket-identity small {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.ticket-badges,
+.ticket-people {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ticket-badges {
+  justify-content: flex-end;
+  flex-shrink: 0;
+}
+
+.ticket-chip {
+  min-height: 24px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #d5dde7;
+  border-radius: 999px;
+  background: white;
+  color: var(--muted);
+  padding: 0 8px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: capitalize;
+}
+
+.ticket-chip.status-open {
+  border-color: #bbd6f5;
+  background: #f0f7ff;
+  color: var(--blue);
+}
+
+.ticket-chip.status-in_progress {
+  border-color: #f0cf9b;
+  background: #fff8ed;
+  color: var(--amber);
+}
+
+.ticket-chip.status-resolved,
+.ticket-chip.status-closed {
+  border-color: #b7d8d2;
+  background: #ecf8f6;
+  color: var(--accent-deep);
+}
+
+.ticket-chip.priority-acil,
+.ticket-chip.priority-kritik,
+.ticket-chip.priority-urgent {
+  border-color: #f4b4aa;
+  background: #fff6f5;
+  color: var(--red);
+}
+
+.ticket-people {
+  margin-top: 8px;
+}
+
+.ticket-people span {
+  width: fit-content;
+  max-width: 100%;
+  border: 1px solid #dce4ec;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.78);
+  padding: 4px 8px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.2;
+}
+
+.ticket-item {
+  align-items: stretch;
+  background: linear-gradient(180deg, #ffffff, #f8fafc);
+}
+
+.ticket-item.selected {
+  box-shadow: inset 4px 0 0 var(--accent), var(--shadow-soft);
+}
+
+.inline-actions {
+  align-content: start;
+}
+
+.inline-actions button,
+.support-actions button,
+.support-toolbar button,
+.ghost-button {
+  box-shadow: 0 6px 14px rgba(17, 32, 51, 0.06);
+}
+
+.inline-actions button:hover,
+.support-actions button:hover,
+.support-toolbar button:hover {
+  transform: translateY(-1px);
+}
+
+.support-detail,
+.ticket-detail-card {
+  background: linear-gradient(180deg, #ffffff, #f8fafc);
+}
+
+.modal-ticket-header {
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.modal-detail-grid .detail-field,
+.support-detail-grid .detail-field {
+  background: rgba(255, 255, 255, 0.92);
 }
 
 @media (max-width: 1240px) {
