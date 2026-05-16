@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
 
@@ -195,9 +195,36 @@ class TicketUpdateRequest(BaseModel):
     resolution_note: Optional[str] = Field(default=None, max_length=1000)
 
 
+class TicketReopenRequest(BaseModel):
+    reason: str = Field(..., min_length=3, max_length=1000)
+
+
+class TicketEvent(BaseModel):
+    id: str
+    ticket_id: str
+    actor: str
+    event_type: str
+    from_status: Optional[str] = None
+    to_status: Optional[str] = None
+    note: Optional[str] = None
+    created_at: str
+
+
+class TicketEventListResponse(BaseModel):
+    events: List[TicketEvent]
+
+
+class EscalationListResponse(BaseModel):
+    tickets: List[TicketRecord]
+
+
 class LoginRequest(BaseModel):
     username: str = Field(..., min_length=3, max_length=80)
     password: str = Field(..., min_length=1, max_length=120)
+
+
+class TokenRefreshRequest(BaseModel):
+    refresh_token: str = Field(..., min_length=20, max_length=4000)
 
 
 class UserProfile(BaseModel):
@@ -212,6 +239,7 @@ class UserProfile(BaseModel):
 class AuthResponse(BaseModel):
     token: str
     user: UserProfile
+    refresh_token: Optional[str] = None
 
 
 class UserCreateRequest(BaseModel):
@@ -247,6 +275,15 @@ class IntegrationConfig(BaseModel):
 
 class IntegrationListResponse(BaseModel):
     integrations: List[IntegrationConfig]
+
+
+class AdminExportResponse(BaseModel):
+    generated_at: str
+    users: List[UserProfile]
+    tickets: List[TicketRecord]
+    integrations: List[IntegrationConfig]
+    documents: List[KnowledgeDocumentInfo]
+    metadata: Dict[str, Any]
 
 
 class IntegrationUpdateRequest(BaseModel):

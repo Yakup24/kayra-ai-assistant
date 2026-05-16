@@ -12,6 +12,13 @@ from uuid import uuid4
 
 from app.schemas import UserProfile
 
+try:
+    from argon2 import PasswordHasher
+    from argon2.exceptions import VerifyMismatchError, VerificationError
+except Exception:  # pragma: no cover - argon2 is optional in local dev
+    PasswordHasher = None
+    VerifyMismatchError = VerificationError = Exception
+
 
 def _b64encode(data: bytes) -> str:
     return base64.urlsafe_b64encode(data).decode("ascii").rstrip("=")
@@ -32,10 +39,13 @@ class AuthService:
         support_username: str | None = None,
         support_password: str | None = None,
         token_ttl_hours: int = 12,
+        refresh_token_ttl_hours: int = 168,
     ) -> None:
         self.database_path = database_path
         self.secret = secret.encode("utf-8")
         self.token_ttl_hours = max(1, token_ttl_hours)
+        self.refresh_token_ttl_hours = max(self.token_ttl_hours, refresh_token_ttl_hours)
+        self.password_hasher = PasswordHasher() if PasswordHasher else None
         self.database_path.parent.mkdir(parents=True, exist_ok=True)
         self._init_db()
         self._ensure_admin(admin_username, admin_password)
@@ -107,25 +117,30 @@ class AuthService:
                 raise ValueError("Kullanıcı bulunamadı.")
         return self.get_user(normalized)
 
-    def login(self, username: str, password: str) -> tuple[str, UserProfile]:
+    def login(self, username: str, password: str) -> tuple[str, str, UserProfile]:
         user = self._find_user(username)
         if not user or not self._verify_password(password, user["password_hash"]):
             raise ValueError("Kullanıcı adı veya şifre hatalı.")
         profile = self._profile(user)
-        return self.create_token(profile), profile
+        return self.create_token(profile), self.create_refresh_token(profile), profile
 
-    def create_token(self, profile: UserProfile) -> str:
+    def create_token(self, profile: UserProfile, token_type: str = "access", ttl_hours: int | None = None) -> str:
+        expires_in = ttl_hours if ttl_hours is not None else self.token_ttl_hours
         payload = {
             "sub": profile.id,
             "username": profile.username,
             "role": profile.role,
-            "exp": int((datetime.now(timezone.utc) + timedelta(hours=self.token_ttl_hours)).timestamp()),
+            "typ": token_type,
+            "exp": int((datetime.now(timezone.utc) + timedelta(hours=expires_in)).timestamp()),
         }
         body = _b64encode(json.dumps(payload, separators=(",", ":"), ensure_ascii=False).encode("utf-8"))
         signature = _b64encode(hmac.new(self.secret, body.encode("ascii"), hashlib.sha256).digest())
         return f"{body}.{signature}"
 
-    def verify_token(self, token: str) -> UserProfile:
+    def create_refresh_token(self, profile: UserProfile) -> str:
+        return self.create_token(profile, token_type="refresh", ttl_hours=self.refresh_token_ttl_hours)
+
+    def verify_token(self, token: str, expected_type: str = "access") -> UserProfile:
         try:
             body, signature = token.split(".", 1)
             expected = _b64encode(hmac.new(self.secret, body.encode("ascii"), hashlib.sha256).digest())
@@ -134,6 +149,9 @@ class AuthService:
             payload = json.loads(_b64decode(body))
             if int(payload["exp"]) < int(datetime.now(timezone.utc).timestamp()):
                 raise ValueError("Oturum süresi doldu.")
+            token_type = payload.get("typ", "access")
+            if token_type != expected_type:
+                raise ValueError("Geçersiz token tipi.")
         except Exception as exc:
             raise ValueError("Geçersiz oturum.") from exc
 
@@ -199,12 +217,25 @@ class AuthService:
         return conn
 
     def _hash_password(self, password: str) -> str:
+        if self.password_hasher:
+            return f"argon2${self.password_hasher.hash(password)}"
         salt = secrets.token_hex(16)
         digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("ascii"), 120_000)
-        return f"{salt}${digest.hex()}"
+        return f"pbkdf2${salt}${digest.hex()}"
 
     def _verify_password(self, password: str, encoded: str) -> bool:
-        salt, digest = encoded.split("$", 1)
+        if encoded.startswith("argon2$"):
+            if not self.password_hasher:
+                return False
+            try:
+                return self.password_hasher.verify(encoded.removeprefix("argon2$"), password)
+            except (VerifyMismatchError, VerificationError):
+                return False
+
+        if encoded.startswith("pbkdf2$"):
+            _, salt, digest = encoded.split("$", 2)
+        else:
+            salt, digest = encoded.split("$", 1)
         candidate = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("ascii"), 120_000).hex()
         return hmac.compare_digest(candidate, digest)
 

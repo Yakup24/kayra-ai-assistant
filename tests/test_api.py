@@ -41,6 +41,19 @@ def test_chat_requires_auth():
     assert response.status_code == 401
 
 
+def test_login_returns_refresh_token_and_refresh_endpoint_renews_access():
+    login = client.post("/api/auth/login", json={"username": "admin", "password": "KayraAdmin2026!"})
+    assert login.status_code == 200
+    refresh_token = login.json()["refresh_token"]
+    assert refresh_token
+
+    refresh = client.post("/api/auth/refresh", json={"refresh_token": refresh_token})
+    assert refresh.status_code == 200
+    assert refresh.json()["token"]
+    assert refresh.json()["refresh_token"]
+    assert refresh.json()["user"]["role"] == "admin"
+
+
 def test_chat_endpoint_returns_sources():
     response = client.post(
         "/api/chat",
@@ -128,6 +141,12 @@ def test_ticket_lifecycle_persists_to_database():
     assert tickets.status_code == 200
     assert any(item["id"] == ticket["id"] for item in tickets.json()["tickets"])
 
+    events = client.get(f"/api/admin/tickets/{ticket['id']}/events", headers=headers)
+    assert events.status_code == 200
+    event_types = [event["event_type"] for event in events.json()["events"]]
+    assert "created" in event_types
+    assert "status_changed" in event_types
+
 
 def test_admin_can_list_documents_and_toggle_integrations():
     headers = auth_headers()
@@ -203,8 +222,38 @@ def test_support_specialist_can_only_manage_ticket_queue():
     assert resolved.json()["resolution_minutes"] is not None
     assert resolved.json()["resolution_score"] >= 85
 
+    reopened = client.post(
+        f"/api/tickets/{ticket['id']}/reopen",
+        json={"reason": "Çalışan sorunun devam ettiğini belirtti."},
+        headers=support_headers,
+    )
+    assert reopened.status_code == 200
+    assert reopened.json()["status"] == "open"
+    assert reopened.json()["resolution_score"] is None
+
     blocked = client.get("/api/admin/users", headers=support_headers)
     assert blocked.status_code == 403
+
+
+def test_admin_export_and_escalations_are_available():
+    headers = auth_headers()
+    create = client.post(
+        "/api/tickets",
+        json={"message": "KVKK konusu uzman onayi gerektiriyor", "priority": "normal"},
+        headers=headers,
+    )
+    assert create.status_code == 200
+
+    escalations = client.get("/api/admin/escalations", headers=headers)
+    assert escalations.status_code == 200
+    assert any(item["id"] == create.json()["id"] for item in escalations.json()["tickets"])
+
+    export = client.get("/api/admin/export", headers=headers)
+    assert export.status_code == 200
+    payload = export.json()
+    assert payload["metadata"]["format"] == "json"
+    assert payload["users"]
+    assert payload["tickets"]
 
 
 def test_employee_can_see_only_own_tickets():

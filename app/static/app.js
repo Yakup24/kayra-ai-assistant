@@ -72,6 +72,7 @@ const slaStatusLabels = {
 
 let authMode = "login";
 let authToken = localStorage.getItem("kayra_token") || "";
+let refreshToken = localStorage.getItem("kayra_refresh_token") || "";
 let currentUser = null;
 let sessionId = localStorage.getItem("kayra_session_id") || crypto.randomUUID();
 let selectedRole = localStorage.getItem("kayra_role") || "general";
@@ -159,8 +160,10 @@ async function submitAuth(event) {
     }
 
     authToken = data.token;
+    refreshToken = data.refresh_token || "";
     currentUser = data.user;
     localStorage.setItem("kayra_token", authToken);
+    if (refreshToken) localStorage.setItem("kayra_refresh_token", refreshToken);
     await enterApp();
   } catch (error) {
     authMessage.textContent = error.message;
@@ -178,9 +181,36 @@ async function restoreSession() {
     currentUser = await response.json();
     await enterApp();
   } catch (error) {
+    if (await refreshSession()) {
+      await enterApp();
+      return;
+    }
     localStorage.removeItem("kayra_token");
+    localStorage.removeItem("kayra_refresh_token");
     authToken = "";
+    refreshToken = "";
     showAuth();
+  }
+}
+
+async function refreshSession() {
+  if (!refreshToken) return false;
+  try {
+    const response = await fetch("/api/auth/refresh", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || "Oturum yenilenemedi");
+    authToken = data.token;
+    refreshToken = data.refresh_token || refreshToken;
+    currentUser = data.user;
+    localStorage.setItem("kayra_token", authToken);
+    localStorage.setItem("kayra_refresh_token", refreshToken);
+    return true;
+  } catch (error) {
+    return false;
   }
 }
 
@@ -258,7 +288,9 @@ function configureTicketPanel() {
 
 function logout() {
   localStorage.removeItem("kayra_token");
+  localStorage.removeItem("kayra_refresh_token");
   authToken = "";
+  refreshToken = "";
   currentUser = null;
   messages.replaceChildren();
   showAuth();
@@ -694,6 +726,8 @@ async function loadTickets() {
       }
       if (ticket.status !== "resolved") {
         actionSet.push(["resolved", "Çöz"]);
+      } else {
+        actionSet.push(["reopen", "Yeniden aç"]);
       }
       actionSet.forEach(([status, label]) => {
         const button = createElement("button", null, label);
@@ -701,7 +735,13 @@ async function loadTickets() {
         if (status === "in_progress" && ticket.status === "in_progress" && ticket.assignee === currentUser.username) {
           button.disabled = true;
         }
-        button.addEventListener("click", () => updateTicketStatus(ticket.id, status, button));
+        button.addEventListener("click", () => {
+          if (status === "reopen") {
+            reopenTicket(ticket.id, button);
+          } else {
+            updateTicketStatus(ticket.id, status, button);
+          }
+        });
         actions.appendChild(button);
       });
     } else {
@@ -709,10 +749,43 @@ async function loadTickets() {
       ask.type = "button";
       ask.addEventListener("click", () => submitMessage(`${ticket.id} talebimin durumu nedir? Özet: ${ticket.summary}`));
       actions.appendChild(ask);
+      if (ticket.status === "resolved") {
+        const reopen = createElement("button", null, "Yeniden aç");
+        reopen.type = "button";
+        reopen.addEventListener("click", () => reopenTicket(ticket.id, reopen));
+        actions.appendChild(reopen);
+      }
     }
     row.append(info, actions);
     ticketList.appendChild(row);
   });
+}
+
+async function reopenTicket(ticketId, button = null) {
+  const reason = prompt("Ticket neden yeniden açılsın?", "Sorun devam ediyor.");
+  if (!reason) return;
+  const originalLabel = button?.textContent;
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Açılıyor";
+  }
+  try {
+    const response = await fetch(`/api/tickets/${encodeURIComponent(ticketId)}/reopen`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      body: JSON.stringify({ reason }),
+    });
+    const updated = await response.json();
+    if (!response.ok) throw new Error(updated.detail || "Ticket yeniden açılamadı.");
+    ticketOutput.textContent = `${updated.id} yeniden açıldı.`;
+    await loadTickets();
+  } catch (error) {
+    ticketOutput.textContent = error.message || "Ticket yeniden açılamadı.";
+    if (button) {
+      button.disabled = false;
+      button.textContent = originalLabel;
+    }
+  }
 }
 
 async function updateTicketStatus(ticketId, status, button = null) {

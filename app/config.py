@@ -11,6 +11,7 @@ class Settings:
     top_k: int = int(os.getenv("TOP_K", "4"))
     auth_secret: str = os.getenv("AUTH_SECRET", "change-this-kayra-dev-secret")
     token_ttl_hours: int = int(os.getenv("TOKEN_TTL_HOURS", "12"))
+    refresh_token_ttl_hours: int = int(os.getenv("REFRESH_TOKEN_TTL_HOURS", "168"))
     admin_username: str = os.getenv("ADMIN_USERNAME", "admin")
     admin_password: str = os.getenv("ADMIN_PASSWORD", "KayraAdmin2026!")
     support_username: str = os.getenv("SUPPORT_USERNAME", "support")

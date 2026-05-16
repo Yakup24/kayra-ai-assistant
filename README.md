@@ -16,11 +16,17 @@ Kayra; müşteri destek, IT, İK, uyumluluk, operasyon, ticket taslağı, audit 
 - Ayrı giriş akışları: çalışan, destek uzmanı ve admin
 - Destek uzmanı paneli: açık ticket kuyruğu, işleme alma ve çözüm notuyla kapatma
 - Çalışan paneli: sorun/talep açma ve kendi ticket kayıtlarını takip etme
+- Access token + refresh token akışı ile daha uzun ve kontrollü oturum yönetimi
+- Argon2 destekli parola hashleme, geriye dönük PBKDF2 hash doğrulama
 - Alan, güven skoru, risk seviyesi ve sonraki aksiyon üretimi
 - Kaynak metnini çalışan için adım adım çözüm talimatına dönüştürme
 - Ticket taslağı üretimi
 - SQLite tabanlı kalıcı ticket kayıtları ve durum güncelleme
 - Önceliğe göre SLA hedef süresi, çözülme süresi ve kapanışta 100 üzerinden çözüm puanı
+- Ticket event geçmişi: oluşturma, işleme alma, durum değişikliği, kapanış ve yeniden açma kayıtları
+- Escalation kuyruğu: yüksek riskli veya SLA süresi aşılmış taleplerin admin/destek tarafından izlenmesi
+- Çözülen talepleri gerekçeyle yeniden açma
+- Admin veri dışa aktarımı: kullanıcı, ticket, entegrasyon, doküman ve metrik özetleri
 - Admin doküman ekleme ve yeniden indeksleme
 - Bilgi tabanı doküman kataloğu
 - Audit trail ve operasyon metrikleri
@@ -68,7 +74,8 @@ python -m uvicorn app.main:app --reload --port 8001
 6. `Online bilgi ara` seçeneğini açarsanız Kayra web kaynaklarından kısa ek bağlam çekmeyi dener
 7. Destek uzmanı girişiyle çalışan talepleri kuyruğu, işleme alma ve çözüm notuyla kapatma ekranı açılır
 8. Ticket kapanınca çözüm süresi ve SLA puanı otomatik hesaplanır
-9. Admin girişiyle Control Center, audit, hesap, entegrasyon, ticket ve bilgi tabanı yönetimi açılır
+9. Çözülmeyen veya tekrar eden sorunlar `Yeniden aç` aksiyonuyla tekrar kuyruğa alınabilir
+10. Admin girişiyle Control Center, audit, hesap, entegrasyon, ticket, escalation ve bilgi tabanı yönetimi açılır
 
 Varsayılan geliştirme admin hesabı:
 
@@ -86,7 +93,7 @@ Kullanıcı adı: support
 
 Üretimde `.env` ile `AUTH_SECRET`, `ADMIN_USERNAME` ve `ADMIN_PASSWORD` değerlerini değiştirin.
 Destek hesabı için `SUPPORT_USERNAME` ve `SUPPORT_PASSWORD` değerlerini de güncelleyin veya admin panelinden yeni destek uzmanı oluşturun.
-Tarayıcı origin listesi için `ALLOWED_ORIGINS`, token süresi için `TOKEN_TTL_HOURS`, istek sınırları için `LOGIN_RATE_LIMIT`, `API_RATE_LIMIT`, `TICKET_RATE_LIMIT` ve `RATE_LIMIT_WINDOW_SECONDS` kullanılabilir.
+Tarayıcı origin listesi için `ALLOWED_ORIGINS`, access token süresi için `TOKEN_TTL_HOURS`, refresh token süresi için `REFRESH_TOKEN_TTL_HOURS`, istek sınırları için `LOGIN_RATE_LIMIT`, `API_RATE_LIMIT`, `TICKET_RATE_LIMIT` ve `RATE_LIMIT_WINDOW_SECONDS` kullanılabilir.
 
 Not: Public/self kayıt yoktur. Kurumsal kullanımda çalışan ve destek uzmanı hesapları admin tarafından veritabanına eklenir.
 
@@ -180,8 +187,10 @@ Admin operasyon listeleri:
 
 ```bash
 curl http://127.0.0.1:8000/api/admin/tickets -H "Authorization: Bearer TOKEN"
+curl http://127.0.0.1:8000/api/admin/escalations -H "Authorization: Bearer TOKEN"
 curl http://127.0.0.1:8000/api/admin/integrations -H "Authorization: Bearer TOKEN"
 curl http://127.0.0.1:8000/api/admin/documents -H "Authorization: Bearer TOKEN"
+curl http://127.0.0.1:8000/api/admin/export -H "Authorization: Bearer TOKEN"
 ```
 
 Destek uzmanı ticket kuyruğu ve çözüm akışı:
@@ -196,6 +205,21 @@ curl -X PATCH http://127.0.0.1:8000/api/support/tickets/KAYRA-1234ABCD ^
 ```
 
 Ticket yanıtında `sla_minutes`, `sla_due_at`, `sla_status`, `resolution_minutes` ve `resolution_score` alanları döner.
+
+Ticket event geçmişi:
+
+```bash
+curl http://127.0.0.1:8000/api/support/tickets/KAYRA-1234ABCD/events -H "Authorization: Bearer TOKEN"
+```
+
+Çözülen ticket'ı yeniden açma:
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/tickets/KAYRA-1234ABCD/reopen ^
+  -H "Content-Type: application/json" ^
+  -H "Authorization: Bearer TOKEN" ^
+  -d "{\"reason\":\"Sorun devam ediyor, VPN bağlantısı tekrar kesildi.\"}"
+```
 
 Çalışanın kendi talepleri:
 
@@ -223,8 +247,8 @@ app/
     rag.py                 Doküman yükleme, parçalama ve arama
     response.py            Chat cevap üretimi
     enterprise.py          Enterprise overview, audit, ticket ve admin servisleri
-    auth.py                SQLite hesap veritabanı, parola hash ve token yönetimi
-    ops.py                 Ticket, entegrasyon ve doküman kataloğu servisleri
+    auth.py                SQLite hesap veritabanı, Argon2/PBKDF2 parola hash ve token yönetimi
+    ops.py                 Ticket, SLA, event geçmişi, escalation, entegrasyon ve doküman kataloğu servisleri
     conversation.py        Kayıtlı sohbet geçmişi
     online.py              Anahtarsız online bilgi arama adaptörü
     privacy.py             Veri maskeleme yardımcıları
@@ -263,9 +287,10 @@ docker compose up --build
 
 ```bash
 python -m pytest
+node --check app/static/app.js
 ```
 
-GitHub Actions her `main` push ve pull request için testleri otomatik çalıştırır:
+GitHub Actions her `main` push ve pull request için compile, test ve Docker build kontrollerini otomatik çalıştırır:
 
 ```text
 .github/workflows/ci.yml
@@ -292,6 +317,7 @@ Bu prototip üretim mimarisine yakın bir iskelet sunar. Gerçek kurumsal ortam 
 
 - PostgreSQL + pgvector veya Qdrant ile kalıcı vektör arama
 - Azure AD/Okta SSO, JWT ve rol bazlı doküman erişimi
+- Refresh token rotation, token blacklist ve MFA
 - OpenAI/Azure OpenAI LLM gateway ve prompt/version yönetimi
 - Microsoft Graph, Jira, ServiceNow, Teams ve Slack adaptörleri
 - Redis/Celery ile e-posta, ticket ve doküman işleme kuyruğu

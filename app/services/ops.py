@@ -6,7 +6,7 @@ import re
 import sqlite3
 from uuid import uuid4
 
-from app.schemas import IntegrationConfig, KnowledgeDocumentInfo, TicketDraftResponse, TicketRecord
+from app.schemas import IntegrationConfig, KnowledgeDocumentInfo, TicketDraftResponse, TicketEvent, TicketRecord
 
 
 DEFAULT_INTEGRATIONS = [
@@ -75,7 +75,7 @@ class OpsService:
         self._init_db()
         self._seed_integrations()
 
-    def create_ticket(self, draft: TicketDraftResponse, requester: str) -> TicketRecord:
+    def create_ticket(self, draft: TicketDraftResponse, requester: str, actor: str | None = None) -> TicketRecord:
         now_dt = datetime.now(timezone.utc)
         now = now_dt.isoformat()
         ticket_id = f"KAYRA-{uuid4().hex[:8].upper()}"
@@ -110,6 +110,15 @@ class OpsService:
                     now,
                     now,
                 ),
+            )
+            self._record_ticket_event(
+                conn,
+                ticket_id=ticket_id,
+                actor=actor or requester,
+                event_type="created",
+                from_status=None,
+                to_status="open",
+                note=draft.summary,
             )
         return self.get_ticket(ticket_id)
 
@@ -150,6 +159,21 @@ class OpsService:
             ).fetchall()
         return [self._ticket(dict(row)) for row in rows]
 
+    def list_escalations(self, limit: int = 50) -> list[TicketRecord]:
+        now = datetime.now(timezone.utc).isoformat()
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT * FROM tickets
+                WHERE status NOT IN ('resolved', 'closed')
+                  AND (escalation_required = 1 OR (sla_due_at IS NOT NULL AND sla_due_at < ?))
+                ORDER BY sla_due_at ASC, created_at ASC
+                LIMIT ?
+                """,
+                (now, limit),
+            ).fetchall()
+        return [self._ticket(dict(row)) for row in rows]
+
     def get_ticket(self, ticket_id: str) -> TicketRecord:
         with self._connect() as conn:
             row = conn.execute("SELECT * FROM tickets WHERE id = ?", (ticket_id,)).fetchone()
@@ -165,6 +189,8 @@ class OpsService:
         assignee: str | None = None,
         priority: str | None = None,
         resolution_note: str | None = None,
+        actor: str = "system",
+        event_note: str | None = None,
     ) -> TicketRecord:
         current = self.get_ticket(ticket_id)
         now_dt = datetime.now(timezone.utc)
@@ -207,7 +233,49 @@ class OpsService:
                     updated["id"],
                 ),
             )
+            self._record_ticket_event(
+                conn,
+                ticket_id=ticket_id,
+                actor=actor,
+                event_type="updated" if next_status == current.status else "status_changed",
+                from_status=current.status,
+                to_status=next_status,
+                note=event_note or resolution_note,
+            )
         return self.get_ticket(ticket_id)
+
+    def reopen_ticket(self, ticket_id: str, *, actor: str, reason: str) -> TicketRecord:
+        current = self.get_ticket(ticket_id)
+        now = datetime.now(timezone.utc).isoformat()
+        with self._connect() as conn:
+            conn.execute(
+                """
+                UPDATE tickets
+                SET status = 'open', resolved_at = NULL, resolution_minutes = NULL,
+                    resolution_score = NULL, updated_at = ?
+                WHERE id = ?
+                """,
+                (now, ticket_id),
+            )
+            self._record_ticket_event(
+                conn,
+                ticket_id=ticket_id,
+                actor=actor,
+                event_type="reopened",
+                from_status=current.status,
+                to_status="open",
+                note=reason,
+            )
+        return self.get_ticket(ticket_id)
+
+    def list_ticket_events(self, ticket_id: str) -> list[TicketEvent]:
+        self.get_ticket(ticket_id)
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT * FROM ticket_events WHERE ticket_id = ? ORDER BY created_at ASC",
+                (ticket_id,),
+            ).fetchall()
+        return [self._event(dict(row)) for row in rows]
 
     def list_integrations(self) -> list[IntegrationConfig]:
         with self._connect() as conn:
@@ -307,6 +375,20 @@ class OpsService:
             self._ensure_column(conn, "tickets", "resolution_score", "INTEGER")
             conn.execute(
                 """
+                CREATE TABLE IF NOT EXISTS ticket_events (
+                    id TEXT PRIMARY KEY,
+                    ticket_id TEXT NOT NULL,
+                    actor TEXT NOT NULL,
+                    event_type TEXT NOT NULL,
+                    from_status TEXT,
+                    to_status TEXT,
+                    note TEXT,
+                    created_at TEXT NOT NULL
+                )
+                """
+            )
+            conn.execute(
+                """
                 CREATE TABLE IF NOT EXISTS integrations (
                     id TEXT PRIMARY KEY,
                     name TEXT NOT NULL,
@@ -352,6 +434,46 @@ class OpsService:
         columns = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
         if column not in columns:
             conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+
+    def _record_ticket_event(
+        self,
+        conn: sqlite3.Connection,
+        *,
+        ticket_id: str,
+        actor: str,
+        event_type: str,
+        from_status: str | None,
+        to_status: str | None,
+        note: str | None,
+    ) -> None:
+        conn.execute(
+            """
+            INSERT INTO ticket_events (id, ticket_id, actor, event_type, from_status, to_status, note, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                str(uuid4()),
+                ticket_id,
+                actor,
+                event_type,
+                from_status,
+                to_status,
+                note,
+                datetime.now(timezone.utc).isoformat(),
+            ),
+        )
+
+    def _event(self, row: dict) -> TicketEvent:
+        return TicketEvent(
+            id=row["id"],
+            ticket_id=row["ticket_id"],
+            actor=row["actor"],
+            event_type=row["event_type"],
+            from_status=row.get("from_status"),
+            to_status=row.get("to_status"),
+            note=row.get("note"),
+            created_at=row["created_at"],
+        )
 
     def _ticket(self, row: dict) -> TicketRecord:
         sla_minutes = int(row.get("sla_minutes") or self._sla_minutes(row["priority"]))

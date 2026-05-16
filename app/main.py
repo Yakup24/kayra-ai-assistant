@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from uuid import uuid4
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
@@ -7,12 +8,14 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import get_settings
 from app.schemas import (
+    AdminExportResponse,
     AuditTrailResponse,
     AuthResponse,
     ChatRequest,
     ChatResponse,
     ConversationHistoryResponse,
     EnterpriseOverviewResponse,
+    EscalationListResponse,
     FeedbackRequest,
     FeedbackResponse,
     HealthResponse,
@@ -23,11 +26,14 @@ from app.schemas import (
     KnowledgeDocumentResponse,
     LoginRequest,
     PasswordResetRequest,
+    TokenRefreshRequest,
     TicketDraftRequest,
     TicketDraftResponse,
     TicketCreateRequest,
+    TicketEventListResponse,
     TicketListResponse,
     TicketRecord,
+    TicketReopenRequest,
     TicketUpdateRequest,
     Topic,
     TopicsResponse,
@@ -60,6 +66,7 @@ auth_service = AuthService(
     settings.support_username,
     settings.support_password,
     settings.token_ttl_hours,
+    settings.refresh_token_ttl_hours,
 )
 conversation_store = ConversationStore(settings.log_dir / "conversations")
 online_search = OnlineSearchService()
@@ -162,10 +169,33 @@ def topics() -> TopicsResponse:
 def login(request: LoginRequest, http_request: Request) -> AuthResponse:
     rate_limit(http_request, "login", request.username, settings.login_rate_limit)
     try:
-        token, user = auth_service.login(request.username, request.password)
+        token, refresh_token, user = auth_service.login(request.username, request.password)
     except ValueError as exc:
         raise HTTPException(status_code=401, detail=str(exc)) from exc
-    return AuthResponse(token=token, user=user)
+    analytics.log_chat(
+        {
+            "session_id": "auth",
+            "message": f"login:{user.username}:{user.role}",
+            "confidence": 1,
+            "handoff_recommended": False,
+            "source_count": 0,
+            "domain": "Auth",
+            "risk_level": "düşük",
+            "response_time_ms": 1,
+            "username": user.username,
+        }
+    )
+    return AuthResponse(token=token, refresh_token=refresh_token, user=user)
+
+
+@app.post("/api/auth/refresh", response_model=AuthResponse)
+def refresh_token(request: TokenRefreshRequest, http_request: Request) -> AuthResponse:
+    rate_limit(http_request, "refresh", "token", settings.login_rate_limit)
+    try:
+        user = auth_service.verify_token(request.refresh_token, expected_type="refresh")
+    except ValueError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+    return AuthResponse(token=auth_service.create_token(user), refresh_token=auth_service.create_refresh_token(user), user=user)
 
 
 @app.get("/api/auth/me", response_model=UserProfile)
@@ -267,6 +297,19 @@ def list_tickets(_: UserProfile = Depends(admin_user)) -> TicketListResponse:
     return TicketListResponse(tickets=ops_service.list_tickets())
 
 
+@app.get("/api/admin/escalations", response_model=EscalationListResponse)
+def list_admin_escalations(_: UserProfile = Depends(admin_user)) -> EscalationListResponse:
+    return EscalationListResponse(tickets=ops_service.list_escalations())
+
+
+@app.get("/api/admin/tickets/{ticket_id}/events", response_model=TicketEventListResponse)
+def admin_ticket_events(ticket_id: str, _: UserProfile = Depends(admin_user)) -> TicketEventListResponse:
+    try:
+        return TicketEventListResponse(events=ops_service.list_ticket_events(ticket_id))
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
 @app.patch("/api/admin/tickets/{ticket_id}", response_model=TicketRecord)
 def update_ticket(ticket_id: str, request: TicketUpdateRequest, admin: UserProfile = Depends(admin_user)) -> TicketRecord:
     try:
@@ -276,6 +319,7 @@ def update_ticket(ticket_id: str, request: TicketUpdateRequest, admin: UserProfi
             assignee=request.assignee,
             priority=request.priority,
             resolution_note=request.resolution_note,
+            actor=admin.username,
         )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -300,6 +344,19 @@ def list_support_tickets(_: UserProfile = Depends(support_user)) -> TicketListRe
     return TicketListResponse(tickets=ops_service.list_support_tickets())
 
 
+@app.get("/api/support/escalations", response_model=EscalationListResponse)
+def list_support_escalations(_: UserProfile = Depends(support_user)) -> EscalationListResponse:
+    return EscalationListResponse(tickets=ops_service.list_escalations())
+
+
+@app.get("/api/support/tickets/{ticket_id}/events", response_model=TicketEventListResponse)
+def support_ticket_events(ticket_id: str, _: UserProfile = Depends(support_user)) -> TicketEventListResponse:
+    try:
+        return TicketEventListResponse(events=ops_service.list_ticket_events(ticket_id))
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
 @app.patch("/api/support/tickets/{ticket_id}", response_model=TicketRecord)
 def update_support_ticket(ticket_id: str, request: TicketUpdateRequest, user: UserProfile = Depends(support_user)) -> TicketRecord:
     assignee = request.assignee
@@ -312,6 +369,7 @@ def update_support_ticket(ticket_id: str, request: TicketUpdateRequest, user: Us
             assignee=assignee,
             priority=request.priority,
             resolution_note=request.resolution_note,
+            actor=user.username,
         )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -334,6 +392,24 @@ def update_support_ticket(ticket_id: str, request: TicketUpdateRequest, user: Us
 @app.get("/api/admin/integrations", response_model=IntegrationListResponse)
 def list_integrations(_: UserProfile = Depends(admin_user)) -> IntegrationListResponse:
     return IntegrationListResponse(integrations=ops_service.list_integrations())
+
+
+@app.get("/api/admin/export", response_model=AdminExportResponse)
+def admin_export(_: UserProfile = Depends(admin_user)) -> AdminExportResponse:
+    tickets = ops_service.list_tickets(limit=500)
+    return AdminExportResponse(
+        generated_at=datetime.now(timezone.utc).isoformat(),
+        users=auth_service.list_users(),
+        tickets=tickets,
+        integrations=ops_service.list_integrations(),
+        documents=ops_service.list_documents(),
+        metadata={
+            "ticket_count": len(tickets),
+            "document_count": len(ops_service.list_documents()),
+            "format": "json",
+            "pii_policy": "password_hashes_excluded",
+        },
+    )
 
 
 @app.patch("/api/admin/integrations/{integration_id}", response_model=IntegrationListResponse)
@@ -492,7 +568,7 @@ def create_ticket(request: TicketCreateRequest, http_request: Request, user: Use
     rate_limit(http_request, "ticket-create", user.username, settings.ticket_rate_limit)
     requester = request.requester if user.role in {"admin", "support"} and request.requester else user.username
     draft = enterprise.draft_ticket(request.message, request.priority, requester)
-    ticket = ops_service.create_ticket(draft, requester)
+    ticket = ops_service.create_ticket(draft, requester, actor=user.username)
     analytics.log_chat(
         {
             "session_id": "ticket",
@@ -512,3 +588,28 @@ def create_ticket(request: TicketCreateRequest, http_request: Request, user: Use
 @app.get("/api/tickets/me", response_model=TicketListResponse)
 def my_tickets(user: UserProfile = Depends(current_user)) -> TicketListResponse:
     return TicketListResponse(tickets=ops_service.list_tickets_for_requester(user.username))
+
+
+@app.post("/api/tickets/{ticket_id}/reopen", response_model=TicketRecord)
+def reopen_ticket(ticket_id: str, request: TicketReopenRequest, user: UserProfile = Depends(current_user)) -> TicketRecord:
+    try:
+        ticket = ops_service.get_ticket(ticket_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    if user.role not in {"admin", "support"} and ticket.requester != user.username:
+        raise HTTPException(status_code=403, detail="Bu ticket için yeniden açma yetkiniz yok.")
+    reopened = ops_service.reopen_ticket(ticket_id, actor=user.username, reason=request.reason)
+    analytics.log_chat(
+        {
+            "session_id": "ticket",
+            "message": f"ticket_reopened:{reopened.id}",
+            "confidence": 1,
+            "handoff_recommended": reopened.escalation_required,
+            "source_count": 0,
+            "domain": reopened.category,
+            "risk_level": "orta",
+            "response_time_ms": 1,
+            "username": user.username,
+        }
+    )
+    return reopened

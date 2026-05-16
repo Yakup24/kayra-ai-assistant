@@ -9,6 +9,7 @@ services:
       LOG_DIR: "runtime"
       MIN_CONFIDENCE: "0.22"
       TOKEN_TTL_HOURS: "12"
+      REFRESH_TOKEN_TTL_HOURS: "168"
       SUPPORT_USERNAME: "support"
       SUPPORT_PASSWORD: "KayraSupport2026!"
       ALLOWED_ORIGINS: "http://127.0.0.1:8000,http://127.0.0.1:8001,http://localhost:8000,http://localhost:8001"
