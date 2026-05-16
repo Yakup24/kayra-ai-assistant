@@ -122,7 +122,12 @@ def test_ticket_lifecycle_persists_to_database():
     assert create.status_code == 200
     ticket = create.json()
     assert ticket["id"].startswith("KAYRA-")
+    assert ticket["record_id"] >= 1
     assert ticket["status"] == "open"
+    assert ticket["requester"] == "admin"
+    assert ticket["requester_display_name"] == "Kayra Admin"
+    assert ticket["created_by"] == "admin"
+    assert ticket["created_by_display_name"] == "Kayra Admin"
     assert ticket["sla_minutes"] == 480
     assert ticket["sla_status"] == "active"
     assert ticket["sla_due_at"]
@@ -210,6 +215,7 @@ def test_support_specialist_can_only_manage_ticket_queue():
     )
     assert update.status_code == 200
     assert update.json()["assignee"] == support_username
+    assert update.json()["assignee_display_name"] == support_username
 
     resolved = client.patch(
         f"/api/support/tickets/{ticket['id']}",
@@ -219,6 +225,7 @@ def test_support_specialist_can_only_manage_ticket_queue():
     assert resolved.status_code == 200
     assert resolved.json()["status"] == "resolved"
     assert "Teslimat kaydı" in resolved.json()["resolution_note"]
+    assert resolved.json()["assignee_display_name"] == support_username
     assert resolved.json()["resolution_minutes"] is not None
     assert resolved.json()["resolution_score"] >= 85
 
@@ -229,6 +236,7 @@ def test_support_specialist_can_only_manage_ticket_queue():
     )
     assert reopened.status_code == 200
     assert reopened.json()["status"] == "open"
+    assert reopened.json()["record_id"] == ticket["record_id"]
     assert reopened.json()["resolution_score"] is None
 
     blocked = client.get("/api/admin/users", headers=support_headers)
@@ -274,6 +282,9 @@ def test_employee_can_see_only_own_tickets():
     assert create_ticket.status_code == 200
     ticket = create_ticket.json()
     assert ticket["requester"] == username
+    assert ticket["requester_id"]
+    assert ticket["requester_display_name"] == username
+    assert ticket["requester_role"] == "employee"
 
     mine = client.get("/api/tickets/me", headers=user_headers)
     assert mine.status_code == 200

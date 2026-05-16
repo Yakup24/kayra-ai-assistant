@@ -6,7 +6,7 @@ import re
 import sqlite3
 from uuid import uuid4
 
-from app.schemas import IntegrationConfig, KnowledgeDocumentInfo, TicketDraftResponse, TicketEvent, TicketRecord
+from app.schemas import IntegrationConfig, KnowledgeDocumentInfo, TicketDraftResponse, TicketEvent, TicketRecord, UserProfile
 
 
 DEFAULT_INTEGRATIONS = [
@@ -75,30 +75,48 @@ class OpsService:
         self._init_db()
         self._seed_integrations()
 
-    def create_ticket(self, draft: TicketDraftResponse, requester: str, actor: str | None = None) -> TicketRecord:
+    def create_ticket(
+        self,
+        draft: TicketDraftResponse,
+        requester: str,
+        actor: str | None = None,
+        requester_profile: UserProfile | None = None,
+        actor_profile: UserProfile | None = None,
+    ) -> TicketRecord:
         now_dt = datetime.now(timezone.utc)
         now = now_dt.isoformat()
         ticket_id = f"KAYRA-{uuid4().hex[:8].upper()}"
+        record_id = self._next_record_id()
         sla_minutes = self._sla_minutes(draft.priority)
         sla_due_at = (now_dt + timedelta(minutes=sla_minutes)).isoformat()
         with self._connect() as conn:
             conn.execute(
                 """
                 INSERT INTO tickets (
-                    id, title, priority, category, summary, status, requester, assignee,
+                    id, record_id, title, priority, category, summary, status, requester,
+                    requester_id, requester_display_name, requester_email, requester_role,
+                    created_by, created_by_display_name, created_by_email, assignee,
                     resolution_note, sla_minutes, sla_due_at, resolved_at, resolution_minutes,
                     resolution_score, escalation_required, created_at, updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     ticket_id,
+                    record_id,
                     draft.title,
                     draft.priority,
                     draft.category,
                     draft.summary,
                     "open",
                     requester,
+                    requester_profile.id if requester_profile else None,
+                    requester_profile.display_name if requester_profile else requester,
+                    requester_profile.email if requester_profile else None,
+                    requester_profile.role if requester_profile else None,
+                    actor_profile.username if actor_profile else actor or requester,
+                    actor_profile.display_name if actor_profile else actor or requester,
+                    actor_profile.email if actor_profile else None,
                     None,
                     None,
                     sla_minutes,
@@ -115,6 +133,7 @@ class OpsService:
                 conn,
                 ticket_id=ticket_id,
                 actor=actor or requester,
+                actor_display_name=actor_profile.display_name if actor_profile else actor or requester,
                 event_type="created",
                 from_status=None,
                 to_status="open",
@@ -190,6 +209,8 @@ class OpsService:
         priority: str | None = None,
         resolution_note: str | None = None,
         actor: str = "system",
+        actor_profile: UserProfile | None = None,
+        assignee_profile: UserProfile | None = None,
         event_note: str | None = None,
     ) -> TicketRecord:
         current = self.get_ticket(ticket_id)
@@ -198,6 +219,11 @@ class OpsService:
         resolution_minutes = current.resolution_minutes
         resolution_score = current.resolution_score
         next_status = status or current.status
+        assignee_display_name = current.assignee_display_name
+        assignee_email = current.assignee_email
+        if assignee is not None:
+            assignee_display_name = assignee_profile.display_name if assignee_profile else assignee
+            assignee_email = assignee_profile.email if assignee_profile else None
         if next_status == "resolved" and current.status != "resolved":
             resolved_at = now_dt.isoformat()
             resolution_minutes = self._elapsed_minutes(current.created_at, resolved_at)
@@ -205,6 +231,8 @@ class OpsService:
         updated = {
             "status": next_status,
             "assignee": assignee if assignee is not None else current.assignee,
+            "assignee_display_name": assignee_display_name,
+            "assignee_email": assignee_email,
             "priority": priority or current.priority,
             "resolution_note": resolution_note if resolution_note is not None else current.resolution_note,
             "resolved_at": resolved_at,
@@ -217,13 +245,16 @@ class OpsService:
             conn.execute(
                 """
                 UPDATE tickets
-                SET status = ?, assignee = ?, priority = ?, resolution_note = ?, resolved_at = ?,
+                SET status = ?, assignee = ?, assignee_display_name = ?, assignee_email = ?,
+                    priority = ?, resolution_note = ?, resolved_at = ?,
                     resolution_minutes = ?, resolution_score = ?, updated_at = ?
                 WHERE id = ?
                 """,
                 (
                     updated["status"],
                     updated["assignee"],
+                    updated["assignee_display_name"],
+                    updated["assignee_email"],
                     updated["priority"],
                     updated["resolution_note"],
                     updated["resolved_at"],
@@ -237,6 +268,7 @@ class OpsService:
                 conn,
                 ticket_id=ticket_id,
                 actor=actor,
+                actor_display_name=actor_profile.display_name if actor_profile else actor,
                 event_type="updated" if next_status == current.status else "status_changed",
                 from_status=current.status,
                 to_status=next_status,
@@ -244,7 +276,7 @@ class OpsService:
             )
         return self.get_ticket(ticket_id)
 
-    def reopen_ticket(self, ticket_id: str, *, actor: str, reason: str) -> TicketRecord:
+    def reopen_ticket(self, ticket_id: str, *, actor: str, reason: str, actor_profile: UserProfile | None = None) -> TicketRecord:
         current = self.get_ticket(ticket_id)
         now = datetime.now(timezone.utc).isoformat()
         with self._connect() as conn:
@@ -261,6 +293,7 @@ class OpsService:
                 conn,
                 ticket_id=ticket_id,
                 actor=actor,
+                actor_display_name=actor_profile.display_name if actor_profile else actor,
                 event_type="reopened",
                 from_status=current.status,
                 to_status="open",
@@ -348,13 +381,23 @@ class OpsService:
                 """
                 CREATE TABLE IF NOT EXISTS tickets (
                     id TEXT PRIMARY KEY,
+                    record_id INTEGER,
                     title TEXT NOT NULL,
                     priority TEXT NOT NULL,
                     category TEXT NOT NULL,
                     summary TEXT NOT NULL,
                     status TEXT NOT NULL,
                     requester TEXT NOT NULL,
+                    requester_id TEXT,
+                    requester_display_name TEXT,
+                    requester_email TEXT,
+                    requester_role TEXT,
+                    created_by TEXT,
+                    created_by_display_name TEXT,
+                    created_by_email TEXT,
                     assignee TEXT,
+                    assignee_display_name TEXT,
+                    assignee_email TEXT,
                     resolution_note TEXT,
                     sla_minutes INTEGER,
                     sla_due_at TEXT,
@@ -367,6 +410,16 @@ class OpsService:
                 )
                 """
             )
+            self._ensure_column(conn, "tickets", "record_id", "INTEGER")
+            self._ensure_column(conn, "tickets", "requester_id", "TEXT")
+            self._ensure_column(conn, "tickets", "requester_display_name", "TEXT")
+            self._ensure_column(conn, "tickets", "requester_email", "TEXT")
+            self._ensure_column(conn, "tickets", "requester_role", "TEXT")
+            self._ensure_column(conn, "tickets", "created_by", "TEXT")
+            self._ensure_column(conn, "tickets", "created_by_display_name", "TEXT")
+            self._ensure_column(conn, "tickets", "created_by_email", "TEXT")
+            self._ensure_column(conn, "tickets", "assignee_display_name", "TEXT")
+            self._ensure_column(conn, "tickets", "assignee_email", "TEXT")
             self._ensure_column(conn, "tickets", "resolution_note", "TEXT")
             self._ensure_column(conn, "tickets", "sla_minutes", "INTEGER")
             self._ensure_column(conn, "tickets", "sla_due_at", "TEXT")
@@ -379,6 +432,7 @@ class OpsService:
                     id TEXT PRIMARY KEY,
                     ticket_id TEXT NOT NULL,
                     actor TEXT NOT NULL,
+                    actor_display_name TEXT,
                     event_type TEXT NOT NULL,
                     from_status TEXT,
                     to_status TEXT,
@@ -387,6 +441,13 @@ class OpsService:
                 )
                 """
             )
+            self._ensure_column(conn, "ticket_events", "actor_display_name", "TEXT")
+            conn.execute("UPDATE tickets SET record_id = rowid WHERE record_id IS NULL")
+            conn.execute("UPDATE tickets SET requester_display_name = requester WHERE requester_display_name IS NULL")
+            conn.execute("UPDATE tickets SET created_by = requester WHERE created_by IS NULL")
+            conn.execute("UPDATE tickets SET created_by_display_name = created_by WHERE created_by_display_name IS NULL")
+            conn.execute("UPDATE tickets SET assignee_display_name = assignee WHERE assignee IS NOT NULL AND assignee_display_name IS NULL")
+            conn.execute("UPDATE ticket_events SET actor_display_name = actor WHERE actor_display_name IS NULL")
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS integrations (
@@ -435,12 +496,18 @@ class OpsService:
         if column not in columns:
             conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
+    def _next_record_id(self) -> int:
+        with self._connect() as conn:
+            value = conn.execute("SELECT COALESCE(MAX(record_id), 0) + 1 FROM tickets").fetchone()[0]
+        return int(value)
+
     def _record_ticket_event(
         self,
         conn: sqlite3.Connection,
         *,
         ticket_id: str,
         actor: str,
+        actor_display_name: str | None,
         event_type: str,
         from_status: str | None,
         to_status: str | None,
@@ -448,13 +515,14 @@ class OpsService:
     ) -> None:
         conn.execute(
             """
-            INSERT INTO ticket_events (id, ticket_id, actor, event_type, from_status, to_status, note, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO ticket_events (id, ticket_id, actor, actor_display_name, event_type, from_status, to_status, note, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 str(uuid4()),
                 ticket_id,
                 actor,
+                actor_display_name or actor,
                 event_type,
                 from_status,
                 to_status,
@@ -468,6 +536,7 @@ class OpsService:
             id=row["id"],
             ticket_id=row["ticket_id"],
             actor=row["actor"],
+            actor_display_name=row.get("actor_display_name") or row["actor"],
             event_type=row["event_type"],
             from_status=row.get("from_status"),
             to_status=row.get("to_status"),
@@ -487,13 +556,23 @@ class OpsService:
             resolution_score = self._resolution_score(sla_minutes, int(resolution_minutes))
         return TicketRecord(
             id=row["id"],
+            record_id=int(row.get("record_id") or 0),
             title=row["title"],
             priority=row["priority"],
             category=row["category"],
             summary=row["summary"],
             status=row["status"],
             requester=row["requester"],
+            requester_id=row.get("requester_id"),
+            requester_display_name=row.get("requester_display_name") or row["requester"],
+            requester_email=row.get("requester_email"),
+            requester_role=row.get("requester_role"),
+            created_by=row.get("created_by") or row["requester"],
+            created_by_display_name=row.get("created_by_display_name") or row.get("created_by") or row["requester"],
+            created_by_email=row.get("created_by_email"),
             assignee=row.get("assignee"),
+            assignee_display_name=row.get("assignee_display_name") or row.get("assignee"),
+            assignee_email=row.get("assignee_email"),
             resolution_note=row.get("resolution_note"),
             sla_minutes=sla_minutes,
             sla_due_at=sla_due_at,

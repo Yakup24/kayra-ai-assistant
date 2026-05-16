@@ -165,13 +165,23 @@ class TicketCreateRequest(BaseModel):
 
 class TicketRecord(BaseModel):
     id: str
+    record_id: int
     title: str
     priority: str
     category: str
     summary: str
     status: str
     requester: str
+    requester_id: Optional[str] = None
+    requester_display_name: Optional[str] = None
+    requester_email: Optional[str] = None
+    requester_role: Optional[str] = None
+    created_by: Optional[str] = None
+    created_by_display_name: Optional[str] = None
+    created_by_email: Optional[str] = None
     assignee: Optional[str] = None
+    assignee_display_name: Optional[str] = None
+    assignee_email: Optional[str] = None
     resolution_note: Optional[str] = None
     sla_minutes: int
     sla_due_at: str
@@ -203,6 +213,7 @@ class TicketEvent(BaseModel):
     id: str
     ticket_id: str
     actor: str
+    actor_display_name: Optional[str] = None
     event_type: str
     from_status: Optional[str] = None
     to_status: Optional[str] = None

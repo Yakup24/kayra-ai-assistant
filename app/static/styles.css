@@ -999,6 +999,61 @@ select:focus {
   line-height: 1.35;
 }
 
+.ticket-detail-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(15, 23, 42, 0.42);
+  backdrop-filter: blur(6px);
+}
+
+.ticket-detail-card {
+  position: relative;
+  width: min(860px, calc(100vw - 32px));
+  max-height: calc(100vh - 40px);
+  overflow: auto;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: white;
+  box-shadow: 0 26px 80px rgba(15, 23, 42, 0.26);
+}
+
+#ticket-detail-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+}
+
+#ticket-detail-content {
+  display: grid;
+  gap: 12px;
+}
+
+.modal-ticket-header {
+  padding-right: 48px;
+}
+
+.modal-ticket-header h3 {
+  margin-top: 4px;
+  font-size: 1.08rem;
+}
+
+.modal-ticket-header p {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.modal-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
 .user-list,
 .ticket-list,
 .document-list {
@@ -1206,7 +1261,8 @@ select:focus {
   .metrics-grid,
   .support-stats,
   .support-detail-grid,
-  .support-actions {
+  .support-actions,
+  .modal-detail-grid {
     grid-template-columns: 1fr;
   }
 }

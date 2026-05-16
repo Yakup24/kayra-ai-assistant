@@ -38,6 +38,9 @@ const supportNewTicketButton = document.querySelector("#support-new-ticket");
 const supportStats = document.querySelector("#support-stats");
 const supportDetail = document.querySelector("#support-detail");
 const supportEvents = document.querySelector("#support-events");
+const ticketDetailModal = document.querySelector("#ticket-detail-modal");
+const ticketDetailClose = document.querySelector("#ticket-detail-close");
+const ticketDetailContent = document.querySelector("#ticket-detail-content");
 const documentForm = document.querySelector("#document-form");
 const documentTitle = document.querySelector("#document-title");
 const documentContent = document.querySelector("#document-content");
@@ -739,9 +742,10 @@ async function loadTickets() {
       });
     }
     const info = createElement("div", "ticket-info");
-    info.appendChild(createElement("strong", null, `${ticket.id} · ${ticket.title}`));
-    info.appendChild(createElement("span", null, `${ticket.category} · ${ticket.priority} · ${ticketStatusLabels[ticket.status] || ticket.status} · Çalışan: ${ticket.requester}`));
-    info.appendChild(createElement("span", "ticket-meta", `Atanan: ${ticket.assignee || "Henüz yok"}`));
+    info.appendChild(createElement("strong", null, `#${ticket.record_id} · ${ticket.id} · ${ticket.title}`));
+    info.appendChild(createElement("span", null, `${ticket.category} · ${ticket.priority} · ${ticketStatusLabels[ticket.status] || ticket.status}`));
+    info.appendChild(createElement("span", "ticket-meta", `Açan: ${ticket.requester_display_name || ticket.requester} (${ticket.requester})${ticket.requester_email ? ` · ${ticket.requester_email}` : ""}`));
+    info.appendChild(createElement("span", "ticket-meta", `Atanan: ${ticket.assignee_display_name || ticket.assignee || "Henüz yok"}`));
     info.appendChild(
       createElement(
         "span",
@@ -779,9 +783,9 @@ async function loadTickets() {
           if (status === "reopen") {
             reopenTicket(ticket.id, button);
           } else if (isSupport() && status === "resolved") {
-            selectTicket(ticket.id, { focusResolution: true });
+            selectTicket(ticket.id, { focusResolution: true, openModal: true });
           } else if (isSupport() && status === "in_progress" && ticket.status === "in_progress" && ticket.assignee === currentUser.username) {
-            selectTicket(ticket.id);
+            selectTicket(ticket.id, { openModal: true });
           } else {
             updateTicketStatus(ticket.id, status, button);
           }
@@ -852,6 +856,9 @@ function selectTicket(ticketId, options = {}) {
   if (selected) {
     renderSupportDetail(selected);
     loadTicketEvents(ticketId);
+    if (options.openModal) {
+      openTicketDetailModal(selected, options);
+    }
   }
   ticketList.querySelectorAll(".ticket-item").forEach((item) => {
     item.classList.toggle("selected", item.dataset.ticketId === ticketId);
@@ -864,13 +871,17 @@ function selectTicket(ticketId, options = {}) {
 function renderSupportDetail(ticket) {
   supportDetail.replaceChildren();
   supportDetail.appendChild(createElement("span", "eyebrow", "Seçili Talep"));
-  supportDetail.appendChild(createElement("h4", null, `${ticket.id} · ${ticket.title}`));
+  supportDetail.appendChild(createElement("h4", null, `#${ticket.record_id} · ${ticket.id} · ${ticket.title}`));
 
   const meta = createElement("div", "support-detail-grid");
-  meta.appendChild(detailField("Çalışan", ticket.requester));
+  meta.appendChild(detailField("Açan kişi", ticket.requester_display_name || ticket.requester));
+  meta.appendChild(detailField("Kullanıcı adı", ticket.requester));
+  meta.appendChild(detailField("E-posta", ticket.requester_email || "-"));
+  meta.appendChild(detailField("Rol", ticket.requester_role || "-"));
   meta.appendChild(detailField("Durum", ticketStatusLabels[ticket.status] || ticket.status));
   meta.appendChild(detailField("Öncelik", ticket.priority));
-  meta.appendChild(detailField("Atanan", ticket.assignee || "Henüz yok"));
+  meta.appendChild(detailField("Atanan", ticket.assignee_display_name || ticket.assignee || "Henüz yok"));
+  meta.appendChild(detailField("Oluşturan", ticket.created_by_display_name || ticket.created_by || "-"));
   meta.appendChild(detailField("SLA", `${slaStatusLabels[ticket.sla_status] || ticket.sla_status} · ${formatDateTime(ticket.sla_due_at)}`));
   meta.appendChild(detailField("Süre", formatDuration(ticket.sla_minutes)));
   supportDetail.appendChild(meta);
@@ -919,6 +930,80 @@ function detailField(label, value) {
   return item;
 }
 
+function openTicketDetailModal(ticket, options = {}) {
+  ticketDetailContent.replaceChildren();
+  const header = createElement("div", "modal-ticket-header");
+  header.appendChild(createElement("span", "eyebrow", `DB kayıt #${ticket.record_id}`));
+  const title = createElement("h3", null, `${ticket.id} · ${ticket.title}`);
+  title.id = "ticket-detail-title";
+  header.appendChild(title);
+  header.appendChild(createElement("p", null, `${ticket.category} · ${ticket.priority} · ${ticketStatusLabels[ticket.status] || ticket.status}`));
+  ticketDetailContent.appendChild(header);
+
+  const grid = createElement("div", "modal-detail-grid");
+  grid.appendChild(detailField("Açan kişi", ticket.requester_display_name || ticket.requester));
+  grid.appendChild(detailField("Açan kullanıcı adı", ticket.requester));
+  grid.appendChild(detailField("Açan user ID", ticket.requester_id || "-"));
+  grid.appendChild(detailField("Açan e-posta", ticket.requester_email || "-"));
+  grid.appendChild(detailField("Açan rol", ticket.requester_role || "-"));
+  grid.appendChild(detailField("Talebi oluşturan", ticket.created_by_display_name || ticket.created_by || "-"));
+  grid.appendChild(detailField("Atanan uzman", ticket.assignee_display_name || ticket.assignee || "Henüz yok"));
+  grid.appendChild(detailField("Atanan e-posta", ticket.assignee_email || "-"));
+  grid.appendChild(detailField("SLA", `${slaStatusLabels[ticket.sla_status] || ticket.sla_status} · ${formatDateTime(ticket.sla_due_at)}`));
+  grid.appendChild(detailField("Çözüm puanı", ticket.resolution_score !== null && ticket.resolution_score !== undefined ? `${ticket.resolution_score}/100` : "-"));
+  grid.appendChild(detailField("Açılış", formatDateTime(ticket.created_at)));
+  grid.appendChild(detailField("Güncelleme", formatDateTime(ticket.updated_at)));
+  ticketDetailContent.appendChild(grid);
+
+  ticketDetailContent.appendChild(createElement("p", "support-summary", ticket.summary));
+  if (ticket.resolution_note) {
+    ticketDetailContent.appendChild(createElement("p", "support-resolution-read", `Son çözüm notu: ${ticket.resolution_note}`));
+  }
+
+  const note = document.createElement("textarea");
+  note.id = "modal-resolution-note";
+  note.rows = 4;
+  note.placeholder = ticket.status === "resolved" ? "Yeniden açma gerekçesi yazın" : "Çözüm notu: yapılan işlem, kullanıcıya iletilen adımlar, doğrulama sonucu";
+  note.value = ticket.status === "resolved" ? "Sorun devam ediyor." : "";
+  ticketDetailContent.appendChild(note);
+
+  const actions = createElement("div", "support-actions");
+  if (ticket.status !== "resolved") {
+    const claim = createElement("button", null, ticket.assignee === currentUser.username ? "Üzerimde" : "Talebi üzerime al");
+    claim.type = "button";
+    claim.disabled = ticket.status === "in_progress" && ticket.assignee === currentUser.username;
+    claim.addEventListener("click", async () => {
+      await updateTicketStatus(ticket.id, "in_progress", claim, { keepModalOpen: true });
+    });
+    actions.appendChild(claim);
+
+    const resolve = createElement("button", "primary-action", "Çözüm notuyla kapat");
+    resolve.type = "button";
+    resolve.addEventListener("click", async () => {
+      await updateTicketStatus(ticket.id, "resolved", resolve, { resolutionNote: note.value.trim(), keepModalOpen: true });
+    });
+    actions.appendChild(resolve);
+  } else {
+    const reopen = createElement("button", "primary-action", "Yeniden aç");
+    reopen.type = "button";
+    reopen.addEventListener("click", async () => {
+      await reopenTicket(ticket.id, reopen, note.value.trim(), { keepModalOpen: true });
+    });
+    actions.appendChild(reopen);
+  }
+  ticketDetailContent.appendChild(actions);
+
+  ticketDetailModal.classList.remove("hidden");
+  if (options.focusResolution) {
+    setTimeout(() => note.focus(), 0);
+  }
+}
+
+function closeTicketDetailModal() {
+  ticketDetailModal.classList.add("hidden");
+  ticketDetailContent.replaceChildren();
+}
+
 function toggleSupportCreateForm() {
   supportCreateOpen = !supportCreateOpen;
   configureTicketPanel();
@@ -944,7 +1029,7 @@ async function loadTicketEvents(ticketId) {
     data.events.forEach((event) => {
       const row = createElement("div", "support-event");
       row.appendChild(createElement("strong", null, event.event_type));
-      row.appendChild(createElement("span", null, `${event.actor} · ${formatDateTime(event.created_at)}`));
+      row.appendChild(createElement("span", null, `${event.actor_display_name || event.actor} (${event.actor}) · ${formatDateTime(event.created_at)}`));
       if (event.note) row.appendChild(createElement("p", null, event.note));
       supportEvents.appendChild(row);
     });
@@ -953,7 +1038,7 @@ async function loadTicketEvents(ticketId) {
   }
 }
 
-async function reopenTicket(ticketId, button = null, presetReason = "") {
+async function reopenTicket(ticketId, button = null, presetReason = "", options = {}) {
   const reason = presetReason || (isSupport() ? document.querySelector("#support-resolution-note")?.value.trim() : prompt("Ticket neden yeniden açılsın?", "Sorun devam ediyor."));
   if (!reason) return;
   const originalLabel = button?.textContent;
@@ -972,6 +1057,10 @@ async function reopenTicket(ticketId, button = null, presetReason = "") {
     selectedTicketId = updated.id;
     ticketOutput.textContent = `${updated.id} yeniden açıldı.`;
     await loadTickets();
+    if (options.keepModalOpen) {
+      const fresh = ticketsCache.find((ticket) => ticket.id === updated.id) || updated;
+      openTicketDetailModal(fresh);
+    }
   } catch (error) {
     ticketOutput.textContent = error.message || "Ticket yeniden açılamadı.";
     if (button) {
@@ -1023,7 +1112,7 @@ async function updateTicketStatus(ticketId, status, button = null, options = {})
       createElement(
         "p",
         null,
-        `${ticketStatusLabels[updated.status] || updated.status} · Atanan: ${updated.assignee || "Henüz yok"} · SLA: ${slaStatusLabels[updated.sla_status] || updated.sla_status}`
+        `${ticketStatusLabels[updated.status] || updated.status} · Atanan: ${updated.assignee_display_name || updated.assignee || "Henüz yok"} · SLA: ${slaStatusLabels[updated.sla_status] || updated.sla_status}`
       )
     );
     if (updated.resolution_score !== null && updated.resolution_score !== undefined) {
@@ -1036,6 +1125,10 @@ async function updateTicketStatus(ticketId, status, button = null, options = {})
     const refreshes = [loadTickets()];
     if (isAdmin()) refreshes.push(loadAudit(), loadOverview());
     await Promise.all(refreshes);
+    if (options.keepModalOpen) {
+      const fresh = ticketsCache.find((ticket) => ticket.id === updated.id) || updated;
+      openTicketDetailModal(fresh, { focusResolution: status === "resolved" ? false : options.focusResolution });
+    }
   } catch (error) {
     ticketOutput.textContent = error.message || "Ticket güncellenemedi.";
     if (button) {
@@ -1182,6 +1275,15 @@ refreshOverview.addEventListener("click", () => {
   }
 });
 supportNewTicketButton.addEventListener("click", toggleSupportCreateForm);
+ticketDetailClose.addEventListener("click", closeTicketDetailModal);
+ticketDetailModal.addEventListener("click", (event) => {
+  if (event.target === ticketDetailModal) closeTicketDetailModal();
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !ticketDetailModal.classList.contains("hidden")) {
+    closeTicketDetailModal();
+  }
+});
 ticketForm.addEventListener("submit", createTicketDraft);
 documentForm.addEventListener("submit", addKnowledgeDocument);
 userForm.addEventListener("submit", createUser);

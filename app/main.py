@@ -144,6 +144,15 @@ def support_user(user: UserProfile = Depends(current_user)) -> UserProfile:
     return user
 
 
+def profile_or_none(username: str | None) -> UserProfile | None:
+    if not username:
+        return None
+    try:
+        return auth_service.get_user(username)
+    except ValueError:
+        return None
+
+
 def should_use_online(message: str, online_enabled: bool) -> bool:
     lowered = message.lower()
     triggers = ["online", "internetten", "web", "güncel", "guncel", "son dakika", "araştır"]
@@ -312,6 +321,7 @@ def admin_ticket_events(ticket_id: str, _: UserProfile = Depends(admin_user)) ->
 
 @app.patch("/api/admin/tickets/{ticket_id}", response_model=TicketRecord)
 def update_ticket(ticket_id: str, request: TicketUpdateRequest, admin: UserProfile = Depends(admin_user)) -> TicketRecord:
+    assignee_profile = profile_or_none(request.assignee)
     try:
         ticket = ops_service.update_ticket(
             ticket_id,
@@ -320,6 +330,8 @@ def update_ticket(ticket_id: str, request: TicketUpdateRequest, admin: UserProfi
             priority=request.priority,
             resolution_note=request.resolution_note,
             actor=admin.username,
+            actor_profile=admin,
+            assignee_profile=assignee_profile,
         )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -362,6 +374,7 @@ def update_support_ticket(ticket_id: str, request: TicketUpdateRequest, user: Us
     assignee = request.assignee
     if user.role == "support" and request.status in {"in_progress", "resolved"}:
         assignee = user.username
+    assignee_profile = profile_or_none(assignee)
     try:
         ticket = ops_service.update_ticket(
             ticket_id,
@@ -370,6 +383,8 @@ def update_support_ticket(ticket_id: str, request: TicketUpdateRequest, user: Us
             priority=request.priority,
             resolution_note=request.resolution_note,
             actor=user.username,
+            actor_profile=user,
+            assignee_profile=assignee_profile,
         )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -567,8 +582,15 @@ def draft_ticket(request: TicketDraftRequest, http_request: Request, user: UserP
 def create_ticket(request: TicketCreateRequest, http_request: Request, user: UserProfile = Depends(current_user)) -> TicketRecord:
     rate_limit(http_request, "ticket-create", user.username, settings.ticket_rate_limit)
     requester = request.requester if user.role in {"admin", "support"} and request.requester else user.username
+    requester_profile = profile_or_none(requester)
     draft = enterprise.draft_ticket(request.message, request.priority, requester)
-    ticket = ops_service.create_ticket(draft, requester, actor=user.username)
+    ticket = ops_service.create_ticket(
+        draft,
+        requester,
+        actor=user.username,
+        requester_profile=requester_profile,
+        actor_profile=user,
+    )
     analytics.log_chat(
         {
             "session_id": "ticket",
@@ -598,7 +620,7 @@ def reopen_ticket(ticket_id: str, request: TicketReopenRequest, user: UserProfil
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     if user.role not in {"admin", "support"} and ticket.requester != user.username:
         raise HTTPException(status_code=403, detail="Bu ticket için yeniden açma yetkiniz yok.")
-    reopened = ops_service.reopen_ticket(ticket_id, actor=user.username, reason=request.reason)
+    reopened = ops_service.reopen_ticket(ticket_id, actor=user.username, reason=request.reason, actor_profile=user)
     analytics.log_chat(
         {
             "session_id": "ticket",
