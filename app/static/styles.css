@@ -817,6 +817,26 @@ select:focus {
   gap: 10px;
 }
 
+.support-toolbar {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.support-toolbar button {
+  min-height: 36px;
+  border: 1px solid #b7d8d2;
+  border-radius: 8px;
+  background: #f3fbf9;
+  color: var(--accent-deep);
+  padding: 0 12px;
+  font-weight: 800;
+}
+
+.support-toolbar button:hover {
+  border-color: var(--accent);
+  background: #e8f7f4;
+}
+
 .support-stats {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

@@ -34,6 +34,7 @@ const ticketPanelTitle = document.querySelector("#ticket-panel-title");
 const ticketPanelMode = document.querySelector("#ticket-panel-mode");
 const ticketPanelCopy = document.querySelector("#ticket-panel-copy");
 const supportWorkbench = document.querySelector("#support-workbench");
+const supportNewTicketButton = document.querySelector("#support-new-ticket");
 const supportStats = document.querySelector("#support-stats");
 const supportDetail = document.querySelector("#support-detail");
 const supportEvents = document.querySelector("#support-events");
@@ -82,6 +83,7 @@ let sessionId = localStorage.getItem("kayra_session_id") || crypto.randomUUID();
 let selectedRole = localStorage.getItem("kayra_role") || "general";
 let ticketsCache = [];
 let selectedTicketId = "";
+let supportCreateOpen = false;
 
 localStorage.setItem("kayra_session_id", sessionId);
 sessionLabel.textContent = sessionId.slice(0, 8);
@@ -273,23 +275,28 @@ function applyModeVisibility() {
 function configureTicketPanel() {
   if (!currentUser) return;
   supportWorkbench.classList.toggle("hidden", !isSupport());
-  ticketForm.classList.toggle("hidden", isSupport());
+  supportNewTicketButton.classList.toggle("hidden", !isSupport());
+  supportNewTicketButton.textContent = supportCreateOpen ? "Talep formunu kapat" : "Yeni iç talep / bug bildir";
+  ticketForm.classList.toggle("hidden", isSupport() && !supportCreateOpen);
   ticketRequester.classList.toggle("hidden", !canManageTickets());
   ticketRequester.value = canManageTickets() ? ticketRequester.value : "";
   if (isAdmin()) {
     ticketPanelTitle.textContent = "Tüm Çalışan Talepleri";
     ticketPanelMode.textContent = "Admin görünümü";
-    ticketPanelCopy.textContent = "Çalışanların açtığı tüm talepleri, öncelikleri, destek atamalarını ve çözüm notlarını izleyebilirsiniz.";
-    ticketMessage.placeholder = "Talep metni veya çalışandan gelen destek notu";
+    ticketPanelCopy.textContent = "Çalışan taleplerini izleyebilir veya destek ekibine iç hata, bug ve operasyon talebi açabilirsiniz.";
+    ticketRequester.placeholder = "Talep sahibi: çalışan, admin veya sistem";
+    ticketMessage.placeholder = "Örn: Admin panelinde kullanıcı oluştururken hata alınıyor";
   } else if (isSupport()) {
     ticketPanelTitle.textContent = "Destek Uzmanı Kuyruğu";
     ticketPanelMode.textContent = "Operasyon ekranı";
-    ticketPanelCopy.textContent = "Çalışan taleplerini seçin, üzerinize alın, çözüm notunu yazın ve SLA puanıyla kapatın.";
-    ticketMessage.placeholder = "Çalışan adına yeni sorun/talep açmak için metin";
+    ticketPanelCopy.textContent = "Çalışan veya admin tarafından açılan talepleri seçin, üzerinize alın ve çözüm notuyla kapatın. Yeni iç destek talebi için butona basın.";
+    ticketRequester.placeholder = "Talep sahibi: çalışan, admin veya sistem";
+    ticketMessage.placeholder = "Örn: Admin panelinde bug oldu, rapor ekranı açılmıyor";
   } else {
     ticketPanelTitle.textContent = "Çalışan Taleplerim";
     ticketPanelMode.textContent = "Çalışan";
     ticketPanelCopy.textContent = "Yaşadığınız sorunu yazıp destek talebi açın; çözüm durumunu ve destek notunu buradan takip edin.";
+    ticketRequester.placeholder = "Talep sahibi çalışan kullanıcı adı";
     ticketMessage.placeholder = "Yaşadığınız sorunu, hata mesajını ve ihtiyacınızı yazın";
   }
 }
@@ -302,6 +309,7 @@ function logout() {
   currentUser = null;
   selectedTicketId = "";
   ticketsCache = [];
+  supportCreateOpen = false;
   messages.replaceChildren();
   showAuth();
 }
@@ -911,6 +919,15 @@ function detailField(label, value) {
   return item;
 }
 
+function toggleSupportCreateForm() {
+  supportCreateOpen = !supportCreateOpen;
+  configureTicketPanel();
+  if (supportCreateOpen) {
+    ticketRequester.value = ticketRequester.value || currentUser.username;
+    ticketMessage.focus();
+  }
+}
+
 async function loadTicketEvents(ticketId) {
   if (!isSupport()) return;
   supportEvents.replaceChildren(createElement("p", "empty-state", "İşlem geçmişi yükleniyor."));
@@ -1052,6 +1069,11 @@ async function createTicketDraft(event) {
   ticketOutput.appendChild(createElement("p", null, `${ticket.category} · ${ticket.priority} · ${ticketStatusLabels[ticket.status] || ticket.status}`));
   ticketOutput.appendChild(createElement("span", "mini-line", `SLA hedefi: ${formatDateTime(ticket.sla_due_at)} · Süre: ${formatDuration(ticket.sla_minutes)}`));
   ticketOutput.appendChild(createElement("span", "mini-line", ticket.summary));
+  selectedTicketId = ticket.id;
+  if (isSupport()) {
+    supportCreateOpen = false;
+    configureTicketPanel();
+  }
   ticketMessage.value = "";
   ticketRequester.value = canManageTickets() ? ticketRequester.value : "";
   const refreshes = [loadTickets()];
@@ -1159,6 +1181,7 @@ refreshOverview.addEventListener("click", () => {
     loadIntegrations();
   }
 });
+supportNewTicketButton.addEventListener("click", toggleSupportCreateForm);
 ticketForm.addEventListener("submit", createTicketDraft);
 documentForm.addEventListener("submit", addKnowledgeDocument);
 userForm.addEventListener("submit", createUser);
