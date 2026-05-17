@@ -26,6 +26,7 @@ from app.schemas import (
     KnowledgeDocumentResponse,
     LoginRequest,
     PasswordResetRequest,
+    ProductionReadinessResponse,
     TokenRefreshRequest,
     TicketDraftRequest,
     TicketDraftResponse,
@@ -294,6 +295,20 @@ def set_user_status(username: str, request: UserStatusRequest, admin: UserProfil
 @app.get("/api/enterprise/overview", response_model=EnterpriseOverviewResponse)
 def enterprise_overview(_: UserProfile = Depends(admin_user)) -> EnterpriseOverviewResponse:
     return enterprise.overview()
+
+
+@app.get("/api/admin/readiness", response_model=ProductionReadinessResponse)
+def production_readiness(_: UserProfile = Depends(admin_user)) -> ProductionReadinessResponse:
+    return enterprise.production_readiness(
+        users=auth_service.list_users(),
+        tickets=ops_service.list_tickets(limit=500),
+        integrations=ops_service.list_integrations(),
+        documents=ops_service.list_documents(),
+        auth_secret_is_default=settings.auth_secret == "change-this-kayra-dev-secret",
+        allowed_origins=settings.allowed_origins,
+        token_ttl_hours=settings.token_ttl_hours,
+        refresh_token_ttl_hours=settings.refresh_token_ttl_hours,
+    )
 
 
 @app.get("/api/admin/audit", response_model=AuditTrailResponse)

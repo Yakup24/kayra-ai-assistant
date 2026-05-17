@@ -100,6 +100,21 @@ def test_enterprise_overview_endpoint_requires_admin():
     assert payload["security_controls"]
 
 
+def test_production_readiness_endpoint_scores_and_lists_actions():
+    response = client.get("/api/admin/readiness", headers=auth_headers())
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["target_profile"] == "600 çalışan, 10 teknik destek uzmanı, 4 admin"
+    assert 0 <= payload["score"] <= 100
+    assert payload["checks"]
+    assert payload["capacity_plan"]["employees_target"] == 600
+    assert any(check["id"] == "sqlite" and check["status"] == "action_required" for check in payload["checks"])
+    assert payload["next_steps"]
+
+    blocked = client.get("/api/admin/readiness")
+    assert blocked.status_code == 401
+
+
 def test_ticket_draft_endpoint_classifies_it_request():
     response = client.post(
         "/api/tickets/draft",

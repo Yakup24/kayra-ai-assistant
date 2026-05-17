@@ -191,7 +191,10 @@ curl http://127.0.0.1:8000/api/admin/escalations -H "Authorization: Bearer TOKEN
 curl http://127.0.0.1:8000/api/admin/integrations -H "Authorization: Bearer TOKEN"
 curl http://127.0.0.1:8000/api/admin/documents -H "Authorization: Bearer TOKEN"
 curl http://127.0.0.1:8000/api/admin/export -H "Authorization: Bearer TOKEN"
+curl http://127.0.0.1:8000/api/admin/readiness -H "Authorization: Bearer TOKEN"
 ```
+
+`/api/admin/readiness`, 600 çalışan, 10 destek uzmanı ve 4 admin hedef profiline göre üretim hazırlık skoru üretir. Güvenlik, CORS/secret, RBAC, SQLite/PostgreSQL geçişi, RAG kapsamı, entegrasyon, SLA kapasitesi, audit ve CI/CD kontrollerini `passed` veya `action_required` olarak döndürür.
 
 Destek uzmanı ticket kuyruğu ve çözüm akışı:
 

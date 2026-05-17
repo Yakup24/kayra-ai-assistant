@@ -774,6 +774,117 @@ select:focus {
   grid-column: 1 / -1;
 }
 
+.readiness-section {
+  display: grid;
+  gap: 10px;
+}
+
+.readiness-capacity {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.readiness-capacity-card,
+.readiness-check,
+.readiness-next {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+  box-shadow: var(--shadow-soft);
+}
+
+.readiness-capacity-card {
+  min-height: 62px;
+  padding: 9px;
+  display: grid;
+  align-content: center;
+  gap: 2px;
+}
+
+.readiness-capacity-card span,
+.readiness-check p,
+.readiness-check small,
+.readiness-next span {
+  color: var(--muted);
+  font-size: 0.76rem;
+  line-height: 1.35;
+}
+
+.readiness-capacity-card strong {
+  font-size: 1.1rem;
+}
+
+.readiness-checks {
+  display: grid;
+  gap: 8px;
+}
+
+.readiness-check {
+  padding: 10px;
+}
+
+.readiness-check-title {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.readiness-check-title strong {
+  font-size: 0.86rem;
+}
+
+.readiness-check-title span {
+  flex-shrink: 0;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: white;
+  color: var(--muted);
+  padding: 3px 8px;
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.readiness-check p,
+.readiness-check small {
+  display: block;
+  margin-top: 6px;
+}
+
+.readiness-check.passed {
+  border-color: #b7d8d2;
+  background: #f2fbf9;
+}
+
+.readiness-check.action_required.severity-critical,
+.readiness-check.action_required.severity-high {
+  border-color: #f4b4aa;
+  background: #fff8f6;
+}
+
+.readiness-check.action_required.severity-medium {
+  border-color: #f0cf9b;
+  background: #fffaf1;
+}
+
+.readiness-next {
+  padding: 10px;
+  display: grid;
+  gap: 6px;
+}
+
+.readiness-next strong {
+  font-size: 0.86rem;
+}
+
+.readiness-next span {
+  display: block;
+  padding-left: 10px;
+  border-left: 2px solid var(--accent);
+}
+
 .tool-form {
   margin-top: 10px;
   display: grid;
@@ -1481,6 +1592,7 @@ select:focus {
 
   .composer,
   .metrics-grid,
+  .readiness-capacity,
   .support-stats,
   .support-detail-grid,
   .support-actions,

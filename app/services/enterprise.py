@@ -10,9 +10,13 @@ from app.schemas import (
     EnterpriseOverviewResponse,
     IntegrationStatus,
     PlatformMetric,
+    ProductionReadinessResponse,
+    ReadinessCheck,
     RoadmapItem,
     SecurityControl,
     TicketDraftResponse,
+    TicketRecord,
+    UserProfile,
 )
 from app.services.analytics import AnalyticsLogger
 from app.services.privacy import mask_sensitive_data
@@ -128,6 +132,180 @@ class EnterpriseService:
             integrations=INTEGRATIONS,
             security_controls=SECURITY_CONTROLS,
             roadmap=ROADMAP,
+        )
+
+    def production_readiness(
+        self,
+        *,
+        users: list[UserProfile],
+        tickets: list[TicketRecord],
+        integrations: list,
+        documents: list,
+        auth_secret_is_default: bool,
+        allowed_origins: list[str],
+        token_ttl_hours: int,
+        refresh_token_ttl_hours: int,
+    ) -> ProductionReadinessResponse:
+        support_count = sum(1 for user in users if user.role == "support" and user.active)
+        admin_count = sum(1 for user in users if user.role == "admin" and user.active)
+        employee_count = sum(1 for user in users if user.role == "employee" and user.active)
+        open_tickets = sum(1 for ticket in tickets if ticket.status != "resolved")
+        breached_tickets = sum(1 for ticket in tickets if ticket.sla_status == "breached")
+        enabled_integrations = sum(1 for item in integrations if item.enabled)
+        strict_origins = "*" not in allowed_origins
+
+        checks = [
+            self._check(
+                "auth-refresh",
+                "Refresh token ve oturum süresi",
+                "Güvenlik",
+                token_ttl_hours <= 24 and refresh_token_ttl_hours >= token_ttl_hours,
+                "Token süreleri yapılandırılmış.",
+                f"Access token {token_ttl_hours} saat, refresh token {refresh_token_ttl_hours} saat.",
+                "Access tokenı 8-12 saat, refresh tokenı 7 gün civarında tut; prod ortamda token blacklist/rotation ekle.",
+                severity="high",
+            ),
+            self._check(
+                "auth-secret",
+                "Üretim secret kontrolü",
+                "Güvenlik",
+                not auth_secret_is_default,
+                "AUTH_SECRET varsayılan değil.",
+                "Varsayılan geliştirme secretı kullanılıyor.",
+                "Canlıya çıkmadan AUTH_SECRET değerini uzun ve rastgele bir secret ile değiştir.",
+                severity="critical",
+            ),
+            self._check(
+                "cors",
+                "CORS origin kısıtı",
+                "Güvenlik",
+                strict_origins,
+                "ALLOWED_ORIGINS kısıtlı.",
+                f"Origin listesi: {', '.join(allowed_origins)}",
+                "Canlı domain dışında origin bırakma; wildcard kullanma.",
+                severity="high",
+            ),
+            self._check(
+                "rbac",
+                "Rol bazlı erişim",
+                "Güvenlik",
+                admin_count >= 1 and support_count >= 1,
+                f"{admin_count} admin ve {support_count} destek hesabı aktif.",
+                "Admin/destek rol ayrımı eksik.",
+                "600 çalışan senaryosu için 4 admin, 10 destek uzmanı ve departman bazlı izin modeli kur.",
+                severity="high",
+            ),
+            self._check(
+                "sqlite",
+                "Veritabanı ölçek hazırlığı",
+                "Veri",
+                False,
+                "PostgreSQL/pgvector hazır.",
+                "Şu an SQLite prototip veritabanı kullanılıyor.",
+                "Canlıda PostgreSQL + Alembic migration + günlük yedek + SSL bağlantı kullan.",
+                severity="critical",
+            ),
+            self._check(
+                "rag",
+                "RAG kaynak kapsamı",
+                "AI/RAG",
+                len(documents) >= 6,
+                f"{len(documents)} bilgi tabanı dokümanı var.",
+                f"Sadece {len(documents)} doküman var.",
+                "600 çalışan için PDF/Office import, chunking, embedding ve pgvector/Qdrant indeksine geç.",
+                severity="medium",
+            ),
+            self._check(
+                "integrations",
+                "Kurumsal entegrasyonlar",
+                "Entegrasyon",
+                enabled_integrations >= 1,
+                f"{enabled_integrations} entegrasyon aktif.",
+                "Entegrasyonlar henüz çoğunlukla plan/adaptör seviyesinde.",
+                "SSO, mail ve ticket sistemi için en az Azure AD/Okta, Graph ve Jira/ServiceNow bağlantılarını aktif et.",
+                severity="medium",
+            ),
+            self._check(
+                "sla",
+                "SLA ve destek kapasitesi",
+                "Operasyon",
+                support_count >= 10 and breached_tickets == 0,
+                f"Açık ticket: {open_tickets}, SLA aşan: {breached_tickets}, destek uzmanı: {support_count}.",
+                f"Açık ticket: {open_tickets}, SLA aşan: {breached_tickets}, destek uzmanı: {support_count}.",
+                "10 teknik uzman hedefi için destek hesaplarını tamamla; SLA aşan ticketlarda otomatik uyarı ekle.",
+                severity="high",
+            ),
+            self._check(
+                "audit",
+                "Audit ve izleme",
+                "Operasyon",
+                True,
+                "Chat, auth, ticket ve admin olayları audit/log akışına yazılıyor.",
+                "Audit akışı yok.",
+                "Prod için JSONL yerine merkezi loglama, Sentry, Prometheus/Grafana ve alarm kanalları ekle.",
+                severity="medium",
+            ),
+            self._check(
+                "ci",
+                "CI/CD temel kontroller",
+                "DevOps",
+                True,
+                "Pytest, compile ve Docker build GitHub Actions içinde koşuyor.",
+                "CI/CD yok.",
+                "Pipeline'a coverage, bandit, dependency scan ve container image publish adımları ekle.",
+                severity="medium",
+            ),
+        ]
+
+        weights = {"critical": 18, "high": 12, "medium": 8, "low": 4}
+        total = sum(weights[check.severity] for check in checks)
+        earned = sum(weights[check.severity] for check in checks if check.status == "passed")
+        score = int((earned / max(total, 1)) * 100)
+        maturity = "Prod adayı" if score >= 80 else "Pilot hazır" if score >= 55 else "Prototip"
+        next_steps = [check.recommendation for check in checks if check.status != "passed"][:5]
+        return ProductionReadinessResponse(
+            generated_at=datetime.now(timezone.utc).isoformat(),
+            target_profile="600 çalışan, 10 teknik destek uzmanı, 4 admin",
+            score=score,
+            maturity=maturity,
+            summary=f"Kayra {maturity.lower()} seviyesinde. En kritik açıklar: veritabanı ölçeği, prod secret/CORS, SSO/MFA ve kurumsal entegrasyonlar.",
+            checks=checks,
+            next_steps=next_steps,
+            capacity_plan={
+                "employees_target": 600,
+                "support_target": 10,
+                "admin_target": 4,
+                "active_employees": employee_count,
+                "active_support": support_count,
+                "active_admins": admin_count,
+                "open_tickets": open_tickets,
+                "breached_tickets": breached_tickets,
+                "recommended_db": "PostgreSQL + pgvector veya Qdrant",
+                "recommended_runtime": "Docker Compose pilot, Kubernetes production",
+                "recommended_observability": "Prometheus/Grafana + Sentry + merkezi log",
+            },
+        )
+
+    def _check(
+        self,
+        check_id: str,
+        title: str,
+        category: str,
+        passed: bool,
+        passed_evidence: str,
+        failed_evidence: str,
+        recommendation: str,
+        *,
+        severity: str,
+    ) -> ReadinessCheck:
+        return ReadinessCheck(
+            id=check_id,
+            title=title,
+            category=category,
+            status="passed" if passed else "action_required",
+            severity=severity,
+            evidence=passed_evidence if passed else failed_evidence,
+            recommendation=recommendation,
         )
 
     def audit_events(self, limit: int = 12) -> list[AuditEvent]:

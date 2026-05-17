@@ -41,6 +41,11 @@ const supportEvents = document.querySelector("#support-events");
 const ticketDetailModal = document.querySelector("#ticket-detail-modal");
 const ticketDetailClose = document.querySelector("#ticket-detail-close");
 const ticketDetailContent = document.querySelector("#ticket-detail-content");
+const readinessScore = document.querySelector("#readiness-score");
+const readinessSummary = document.querySelector("#readiness-summary");
+const readinessCapacity = document.querySelector("#readiness-capacity");
+const readinessChecks = document.querySelector("#readiness-checks");
+const readinessNext = document.querySelector("#readiness-next");
 const documentForm = document.querySelector("#document-form");
 const documentTitle = document.querySelector("#document-title");
 const documentContent = document.querySelector("#document-content");
@@ -247,7 +252,7 @@ async function enterApp() {
   applyModeVisibility();
   await Promise.all([checkHealth(), loadTopics(), loadTickets()]);
   if (isAdmin()) {
-    await Promise.all([loadOverview(), loadAudit(), loadUsers(), loadTickets(), loadDocuments(), loadIntegrations()]);
+    await Promise.all([loadOverview(), loadReadiness(), loadAudit(), loadUsers(), loadTickets(), loadDocuments(), loadIntegrations()]);
   }
   await loadConversationHistory();
   if (!messages.children.length) {
@@ -383,6 +388,7 @@ function addFeedback(message) {
       row.replaceChildren(document.createTextNode("Geri bildirim alındı"));
       if (isAdmin()) {
         loadOverview();
+        loadReadiness();
         loadAudit();
       }
     });
@@ -435,6 +441,7 @@ async function submitMessage(message) {
     addFeedback(text);
     if (isAdmin()) {
       loadOverview();
+      loadReadiness();
       loadAudit();
     }
     if (canManageTickets()) {
@@ -539,6 +546,50 @@ function renderSecurity(items) {
     row.appendChild(createElement("p", null, item.description));
     list.appendChild(row);
   });
+}
+
+async function loadReadiness() {
+  const response = await fetch("/api/admin/readiness", { headers: authHeaders() });
+  if (!response.ok) return;
+  const data = await response.json();
+  readinessScore.textContent = `${data.score}/100 · ${data.maturity}`;
+  readinessSummary.textContent = data.summary;
+
+  readinessCapacity.replaceChildren();
+  const capacityItems = [
+    ["Çalışan hedefi", data.capacity_plan.employees_target],
+    ["Aktif çalışan", data.capacity_plan.active_employees],
+    ["Destek hedefi", data.capacity_plan.support_target],
+    ["Aktif destek", data.capacity_plan.active_support],
+    ["Admin hedefi", data.capacity_plan.admin_target],
+    ["Aktif admin", data.capacity_plan.active_admins],
+    ["Açık ticket", data.capacity_plan.open_tickets],
+    ["SLA aşan", data.capacity_plan.breached_tickets],
+  ];
+  capacityItems.forEach(([label, value]) => {
+    const card = createElement("div", "readiness-capacity-card");
+    card.appendChild(createElement("span", null, label));
+    card.appendChild(createElement("strong", null, String(value ?? "-")));
+    readinessCapacity.appendChild(card);
+  });
+
+  readinessChecks.replaceChildren();
+  data.checks.forEach((check) => {
+    const row = createElement("div", `readiness-check ${check.status} severity-${check.severity}`);
+    const title = createElement("div", "readiness-check-title");
+    title.appendChild(createElement("strong", null, check.title));
+    title.appendChild(createElement("span", null, `${check.category} · ${check.severity}`));
+    row.appendChild(title);
+    row.appendChild(createElement("p", null, check.evidence));
+    if (check.status !== "passed") {
+      row.appendChild(createElement("small", null, check.recommendation));
+    }
+    readinessChecks.appendChild(row);
+  });
+
+  readinessNext.replaceChildren();
+  readinessNext.appendChild(createElement("strong", null, "İlk yapılacaklar"));
+  data.next_steps.forEach((step) => readinessNext.appendChild(createElement("span", null, step)));
 }
 
 async function loadAudit() {
@@ -1139,7 +1190,7 @@ async function updateTicketStatus(ticketId, status, button = null, options = {})
     }
 
     const refreshes = [loadTickets()];
-    if (isAdmin()) refreshes.push(loadAudit(), loadOverview());
+    if (isAdmin()) refreshes.push(loadAudit(), loadOverview(), loadReadiness());
     await Promise.all(refreshes);
     if (options.keepModalOpen) {
       const fresh = ticketsCache.find((ticket) => ticket.id === updated.id) || updated;
@@ -1186,7 +1237,7 @@ async function createTicketDraft(event) {
   ticketMessage.value = "";
   ticketRequester.value = canManageTickets() ? ticketRequester.value : "";
   const refreshes = [loadTickets()];
-  if (isAdmin()) refreshes.push(loadOverview(), loadAudit());
+  if (isAdmin()) refreshes.push(loadOverview(), loadReadiness(), loadAudit());
   await Promise.all(refreshes);
 }
 
@@ -1211,6 +1262,7 @@ async function addKnowledgeDocument(event) {
   documentContent.value = "";
   checkHealth();
   loadOverview();
+  loadReadiness();
   loadAudit();
   loadDocuments();
 }
@@ -1244,7 +1296,7 @@ async function deleteDocument(filename) {
   });
   const result = await response.json();
   documentOutput.textContent = response.ok ? `${filename} silindi. ${result.indexed_chunks} parça kaldı.` : result.detail || "Doküman silinemedi.";
-  await Promise.all([loadDocuments(), checkHealth(), loadOverview(), loadAudit()]);
+  await Promise.all([loadDocuments(), checkHealth(), loadOverview(), loadReadiness(), loadAudit()]);
 }
 
 function scrollToLatest() {
@@ -1284,6 +1336,7 @@ refreshOverview.addEventListener("click", () => {
   loadTickets();
   if (isAdmin()) {
     loadOverview();
+    loadReadiness();
     loadAudit();
     loadUsers();
     loadDocuments();

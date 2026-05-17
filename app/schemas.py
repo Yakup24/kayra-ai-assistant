@@ -89,6 +89,27 @@ class SecurityControl(BaseModel):
     description: str
 
 
+class ReadinessCheck(BaseModel):
+    id: str
+    title: str
+    category: str
+    status: str
+    severity: str
+    evidence: str
+    recommendation: str
+
+
+class ProductionReadinessResponse(BaseModel):
+    generated_at: str
+    target_profile: str
+    score: int
+    maturity: str
+    summary: str
+    checks: List[ReadinessCheck]
+    next_steps: List[str]
+    capacity_plan: Dict[str, Any]
+
+
 class RoadmapItem(BaseModel):
     phase: str
     title: str
